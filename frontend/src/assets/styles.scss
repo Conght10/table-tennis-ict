@@ -1,0 +1,548 @@
+/* You can add global styles to this file, and also import other style files */
+@use 'primeicons/primeicons.css';
+@use '@/assets/layout/layout.scss';
+@use '@/assets/demo/demo.scss';
+
+body,
+button,
+input,
+select,
+textarea,
+div,
+span,
+p,
+a,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+td,
+th {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-weight: 600 !important;
+}
+
+/* Unify layout to Topbar menu only: disable sidebar layout completely */
+.layout-sidebar {
+    display: none !important;
+}
+
+.layout-main-container {
+    margin-left: 0 !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+}
+
+.layout-menu-button {
+    display: none !important;
+}
+
+/* EVNICT full-system visual language */
+:root {
+    --ev-surface-bg: #f3f6fb;
+    --ev-surface-2: #edf3fb;
+    --ev-card-bg: rgba(255, 255, 255, 0.9);
+    --ev-card-border: rgba(148, 163, 184, 0.34);
+    --ev-text: #0f172a;
+    --ev-text-soft: #475569;
+    --ev-primary: #0ea5e9;
+    --ev-primary-strong: #2563eb;
+    --ev-accent: #f97316;
+    --ev-success: #16a34a;
+    --ev-danger: #dc2626;
+    --ev-radius-lg: 1rem;
+    --ev-radius-md: 0.7rem;
+    --ev-shadow-card: 0 10px 28px rgba(15, 23, 42, 0.08);
+    --ev-shadow-card-hover: 0 16px 36px rgba(15, 23, 42, 0.12);
+    --ev-focus-ring: 0 0 0 3px rgba(14, 165, 233, 0.2);
+}
+
+:root[class*='app-dark'] {
+    --ev-surface-bg: #030712;
+    --ev-surface-2: #0b1220;
+    --ev-card-bg: rgba(15, 23, 42, 0.78);
+    --ev-card-border: rgba(100, 116, 139, 0.5);
+    --ev-text: #e2e8f0;
+    --ev-text-soft: #94a3b8;
+    --ev-primary: #38bdf8;
+    --ev-primary-strong: #3b82f6;
+    --ev-accent: #fb923c;
+    --ev-success: #22c55e;
+    --ev-danger: #f87171;
+    --ev-shadow-card: 0 12px 34px rgba(2, 6, 23, 0.36);
+    --ev-shadow-card-hover: 0 18px 42px rgba(2, 6, 23, 0.46);
+    --ev-focus-ring: 0 0 0 3px rgba(56, 189, 248, 0.22);
+}
+
+body {
+    background:
+        radial-gradient(circle at 11% 2%, rgba(14, 165, 233, 0.14), transparent 28%),
+        radial-gradient(circle at 88% 1%, rgba(37, 99, 235, 0.1), transparent 30%),
+        linear-gradient(180deg, var(--ev-surface-bg) 0%, var(--ev-surface-2) 100%);
+    color: var(--ev-text);
+}
+
+.evnict-modern-shell {
+    position: relative;
+    min-height: 100vh;
+}
+
+.evnict-modern-shell::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+        linear-gradient(120deg, transparent 0%, rgba(14, 165, 233, 0.03) 36%, transparent 70%),
+        radial-gradient(circle at 50% 100%, rgba(249, 115, 22, 0.07), transparent 46%);
+}
+
+.evnict-modern-shell .layout-topbar,
+.evnict-modern-shell .layout-main-container,
+.evnict-modern-shell .layout-main,
+.evnict-modern-shell .layout-footer {
+    position: relative;
+    z-index: 1;
+}
+
+.evnict-modern-shell .layout-topbar {
+    height: 4.35rem;
+    border-bottom: 1px solid var(--ev-card-border);
+    background: color-mix(in srgb, var(--ev-card-bg) 94%, transparent);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.evnict-modern-shell .layout-topbar .layout-topbar-logo span {
+    background: linear-gradient(92deg, var(--ev-primary-strong), var(--ev-primary) 54%, var(--ev-accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent !important;
+}
+
+.evnict-modern-shell .layout-topbar > .flex.items-center.gap-6.ml-8 {
+    gap: 0.45rem !important;
+    margin-left: 1.25rem !important;
+    padding: 0.22rem;
+    border: 1px solid var(--ev-card-border);
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--ev-card-bg) 96%, transparent);
+}
+
+.evnict-modern-shell .layout-topbar > .flex.items-center.gap-6.ml-8 a {
+    border-radius: 9999px;
+    padding: 0.42rem 0.75rem;
+    font-size: 0.76rem;
+    border: 1px solid transparent;
+}
+
+.evnict-modern-shell .layout-topbar > .flex.items-center.gap-6.ml-8 a.text-primary.font-bold {
+    border-color: rgba(14, 165, 233, 0.35);
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.16), rgba(37, 99, 235, 0.12));
+    box-shadow: 0 2px 8px rgba(14, 165, 233, 0.2);
+}
+
+.evnict-modern-shell .layout-topbar .layout-topbar-action {
+    border-radius: 0.8rem;
+    border: 1px solid transparent;
+}
+
+.evnict-modern-shell .layout-topbar .layout-topbar-action:hover {
+    border-color: var(--ev-card-border);
+    background: rgba(148, 163, 184, 0.14);
+}
+
+.evnict-modern-shell .layout-main-container {
+    margin-left: 0 !important;
+    padding-top: 5.15rem;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+}
+
+.evnict-modern-shell .layout-main {
+    padding-bottom: 2.5rem;
+}
+
+.evnict-modern-shell .layout-footer {
+    position: relative;
+    border-top: none;
+    background: transparent;
+    border-radius: 0;
+    padding: 1rem 0 0.45rem;
+    margin-top: 0.35rem;
+    color: var(--ev-text-soft);
+    font-weight: 700;
+}
+
+.evnict-modern-shell .layout-footer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.55), transparent);
+}
+
+.evnict-modern-shell .card,
+.evnict-modern-shell .p-dialog,
+.evnict-modern-shell .p-datatable,
+.evnict-modern-shell .p-panel {
+    border-radius: var(--ev-radius-lg);
+    border: 1px solid var(--ev-card-border);
+    background: var(--ev-card-bg);
+    box-shadow: var(--ev-shadow-card);
+}
+
+.evnict-modern-shell .card {
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.evnict-modern-shell .card:hover {
+    box-shadow: var(--ev-shadow-card-hover);
+    border-color: rgba(14, 165, 233, 0.38);
+}
+
+.evnict-modern-shell table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.evnict-modern-shell table thead th {
+    font-size: 0.72rem;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
+    color: var(--ev-text-soft);
+    background: color-mix(in srgb, var(--ev-card-bg) 74%, #dbeafe);
+}
+
+.evnict-modern-shell table tbody tr {
+    transition: background-color 0.16s ease;
+}
+
+.evnict-modern-shell table tbody tr:hover {
+    background: color-mix(in srgb, rgba(14, 165, 233, 0.14) 56%, transparent) !important;
+}
+
+.evnict-modern-shell input,
+.evnict-modern-shell select,
+.evnict-modern-shell textarea,
+.evnict-modern-shell .p-inputtext,
+.evnict-modern-shell .p-select,
+.evnict-modern-shell .p-inputnumber-input,
+.evnict-modern-shell .p-datepicker-input {
+    border-radius: var(--ev-radius-md) !important;
+    border-color: rgba(148, 163, 184, 0.52) !important;
+}
+
+.evnict-modern-shell input:focus,
+.evnict-modern-shell select:focus,
+.evnict-modern-shell textarea:focus,
+.evnict-modern-shell .p-inputtext:focus,
+.evnict-modern-shell .p-inputnumber-input:focus,
+.evnict-modern-shell .p-datepicker-input:focus {
+    box-shadow: var(--ev-focus-ring) !important;
+    border-color: rgba(14, 165, 233, 0.72) !important;
+    outline: none;
+}
+
+.evnict-modern-shell .p-select {
+    border: 1px solid rgba(148, 163, 184, 0.52) !important;
+}
+
+.evnict-modern-shell .p-button,
+.evnict-modern-shell button {
+    border-radius: var(--ev-radius-md) !important;
+}
+
+.evnict-modern-shell .p-button {
+    font-weight: 800;
+    letter-spacing: 0.01em;
+}
+
+.evnict-modern-shell .p-button:not(.p-button-outlined):not(.p-button-secondary) {
+    border: none;
+    background: linear-gradient(90deg, var(--ev-primary-strong), var(--ev-primary));
+}
+
+.evnict-modern-shell .p-dialog .p-dialog-header {
+    border-bottom: 1px solid var(--ev-card-border);
+    background: color-mix(in srgb, var(--ev-card-bg) 96%, transparent);
+    border-radius: var(--ev-radius-lg) var(--ev-radius-lg) 0 0;
+}
+
+.evnict-modern-shell .p-dialog .p-dialog-content {
+    background: color-mix(in srgb, var(--ev-card-bg) 92%, transparent);
+}
+
+.evnict-modern-shell .p-tag {
+    border-radius: 9999px;
+    font-weight: 800;
+}
+
+.evnict-modern-shell .screen-hero {
+    border-radius: 1.15rem;
+    border: 1px solid var(--ev-card-border);
+    background:
+        radial-gradient(circle at 12% 14%, rgba(14, 165, 233, 0.16), transparent 42%),
+        radial-gradient(circle at 88% 18%, rgba(37, 99, 235, 0.12), transparent 38%),
+        linear-gradient(150deg, color-mix(in srgb, var(--ev-card-bg) 96%, transparent), color-mix(in srgb, var(--ev-card-bg) 86%, #e2e8f0));
+    box-shadow: var(--ev-shadow-card);
+    padding: 1rem 1.2rem;
+}
+
+.evnict-modern-shell .screen-hero__title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 900;
+    letter-spacing: 0.01em;
+    color: var(--ev-text);
+}
+
+.evnict-modern-shell .screen-hero__subtitle {
+    margin-top: 0.25rem;
+    color: var(--ev-text-soft);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.evnict-modern-shell .screen-hero__metrics {
+    margin-top: 0.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.evnict-modern-shell .screen-hero__metric {
+    padding: 0.35rem 0.55rem;
+    border-radius: 9999px;
+    border: 1px solid var(--ev-card-border);
+    background: color-mix(in srgb, var(--ev-card-bg) 97%, transparent);
+    color: var(--ev-text-soft);
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.evnict-modern-shell .screen-hero__metric strong {
+    color: var(--ev-text);
+    font-size: 0.78rem;
+}
+
+.evnict-modern-shell .tournament-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.85rem;
+    border-radius: 0.85rem;
+    border: 1px solid var(--ev-card-border);
+    background: color-mix(in srgb, var(--ev-card-bg) 96%, transparent);
+}
+
+.evnict-modern-shell .tournament-toolbar__left {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.evnict-modern-shell .tournament-toolbar__right {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-left: auto;
+}
+
+.evnict-modern-shell .tournament-chip {
+    border: 1px solid var(--ev-card-border);
+    border-radius: 9999px;
+    padding: 0.38rem 0.68rem;
+    background: color-mix(in srgb, var(--ev-card-bg) 97%, transparent);
+    color: var(--ev-text-soft);
+    font-size: 0.72rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.16s ease;
+}
+
+.evnict-modern-shell .tournament-chip:hover {
+    border-color: rgba(14, 165, 233, 0.4);
+    color: var(--ev-text);
+}
+
+.evnict-modern-shell .tournament-chip.is-active {
+    border-color: rgba(14, 165, 233, 0.48);
+    background: linear-gradient(130deg, rgba(14, 165, 233, 0.18), rgba(37, 99, 235, 0.12));
+    color: #0f172a;
+}
+
+:root[class*='app-dark'] .evnict-modern-shell .tournament-chip.is-active {
+    color: #e2e8f0;
+}
+
+.evnict-modern-shell .tournament-search {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid var(--ev-card-border);
+    border-radius: 0.7rem;
+    background: color-mix(in srgb, var(--ev-card-bg) 98%, transparent);
+    padding: 0.32rem 0.55rem;
+    min-width: 250px;
+}
+
+.evnict-modern-shell .tournament-search i {
+    color: var(--ev-text-soft);
+    font-size: 0.75rem;
+}
+
+.evnict-modern-shell .tournament-search input {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    width: 100%;
+    padding: 0.2rem 0;
+    font-size: 0.8rem;
+}
+
+.evnict-modern-shell .tournament-search input:focus {
+    outline: none;
+}
+
+.evnict-modern-shell .tournament-filter-select {
+    min-width: 165px;
+    height: 2.1rem;
+    border-radius: 0.7rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.evnict-modern-shell .tournament-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.evnict-modern-shell .tournament-metric {
+    padding: 0.28rem 0.52rem;
+    border-radius: 9999px;
+    border: 1px solid var(--ev-card-border);
+    background: color-mix(in srgb, var(--ev-card-bg) 96%, transparent);
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: var(--ev-text-soft);
+}
+
+.evnict-modern-shell .tournament-metrics--after-table {
+    margin-top: -0.2rem;
+}
+
+.evnict-modern-shell .tournament-toolbar-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.55), transparent);
+    margin: 0.35rem 0 0.8rem;
+}
+
+.evnict-modern-shell .tournament-tabs {
+    position: static;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding: 0.45rem 0 0.65rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid var(--ev-card-border);
+    background: transparent;
+}
+
+.evnict-modern-shell .tournament-tabs::-webkit-scrollbar {
+    height: 5px;
+}
+
+.evnict-modern-shell .tournament-tabs::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 9999px;
+}
+
+.evnict-modern-shell .tournament-tab-btn {
+    border: 1px solid transparent;
+    background: transparent;
+    border-radius: 9999px;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: var(--ev-text-soft);
+    cursor: pointer;
+    transition: all 0.16s ease;
+}
+
+.evnict-modern-shell .tournament-tab-btn:hover {
+    border-color: var(--ev-card-border);
+    color: var(--ev-text);
+}
+
+.evnict-modern-shell .tournament-tab-btn.is-active {
+    border-color: rgba(14, 165, 233, 0.45);
+    background: linear-gradient(132deg, rgba(14, 165, 233, 0.18), rgba(37, 99, 235, 0.1));
+    color: var(--ev-text);
+}
+
+.evnict-modern-shell .tournament-tab-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+@media (max-width: 991px) {
+    .evnict-modern-shell .layout-main-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+
+    .evnict-modern-shell .layout-topbar {
+        height: 4rem;
+        padding: 0 1rem;
+    }
+
+    .evnict-modern-shell .layout-main-container {
+        padding-top: 4.8rem;
+    }
+
+    .evnict-modern-shell .layout-topbar > .flex.items-center.gap-6.ml-8 {
+        display: none;
+    }
+
+    .evnict-modern-shell .tournament-toolbar {
+        padding: 0.65rem;
+    }
+
+    .evnict-modern-shell .tournament-toolbar__right {
+        width: 100%;
+        margin-left: 0;
+    }
+
+    .evnict-modern-shell .tournament-search {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .evnict-modern-shell .tournament-filter-select {
+        min-width: 135px;
+    }
+
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+    .evnict-modern-shell .card,
+    .evnict-modern-shell table tbody tr,
+    .evnict-modern-shell button,
+    .evnict-modern-shell .p-button {
+        transition: none !important;
+    }
+}
