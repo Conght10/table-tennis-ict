@@ -76,6 +76,8 @@ export interface TournamentRegistration {
     eloSnapshot: number;
     genderSnapshot?: string;
     departmentSnapshot?: string;
+    status?: 'active' | 'withdrawn';
+    isCaptain?: boolean;
     registeredAt: string;
 }
 
@@ -117,6 +119,7 @@ export interface TournamentDrawRevision {
 export interface Tournament {
     id: string;
     version?: number;
+    registrationVersion?: number;
     metadataVersion?: number;
     competitionVersion?: number;
     name: string;

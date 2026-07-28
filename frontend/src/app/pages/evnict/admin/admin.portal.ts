@@ -1959,8 +1959,8 @@ import { Router, ActivatedRoute } from '@angular/router';
         <!-- Import Registrations Dialog -->
         <p-dialog [(visible)]="showImportDialog" header="Import Đăng Ký từ JSON" [modal]="true" [style]="{ width: '450px' }" [draggable]="false" [resizable]="false" [appendTo]="'body'">
             <div class="space-y-4 pt-2 text-xs">
-                <p class="text-[11px] text-slate-500 m-0 leading-relaxed">Dán danh sách đăng ký dạng mảng JSON. Ví dụ:<br/><code class="bg-slate-100 dark:bg-slate-800 p-1 rounded font-mono block mt-1">[ { "memberId": "u01", "seed": 1 } ]</code></p>
-                <textarea rows="8" class="w-full text-xs font-mono p-2 border rounded resize-y" [(ngModel)]="importJsonInput" placeholder='[ { "memberId": "u01", "seed": 1 } ]'></textarea>
+                <p class="text-[11px] text-slate-500 m-0 leading-relaxed">Dán danh sách đăng ký dạng mảng JSON. Ví dụ:<br/><code class="bg-slate-100 dark:bg-slate-800 p-1 rounded font-mono block mt-1">[ {{ '{' }} "memberId": "u01", "seed": 1 {{ '}' }} ]</code></p>
+                <textarea rows="8" class="w-full text-xs font-mono p-2 border rounded resize-y" [(ngModel)]="importJsonInput" [placeholder]="importJsonPlaceholder"></textarea>
                 <div class="flex justify-end gap-2 pt-4 border-t">
                     <p-button label="Hủy" severity="secondary" [outlined]="true" (onClick)="showImportDialog = false" />
                     <p-button label="Import" severity="primary" [disabled]="!importJsonInput" (onClick)="executeImportRegistrations()" />
@@ -2152,6 +2152,7 @@ export class AdminPortal implements OnInit {
     };
     showImportDialog = false;
     importJsonInput = '';
+    importJsonPlaceholder = '[ { "memberId": "u01", "seed": 1 } ]';
     impactedTeams: any[] = [];
     selectedAddPlayerId = '';
     selectedAddPlayerIds: string[] = [];
