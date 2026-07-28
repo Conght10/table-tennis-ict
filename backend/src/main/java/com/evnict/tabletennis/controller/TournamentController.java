@@ -16,6 +16,7 @@ import com.evnict.tabletennis.repository.TournamentRepository;
 import com.evnict.tabletennis.repository.TournamentStateRepository;
 import com.evnict.tabletennis.entity.*;
 import com.evnict.tabletennis.repository.*;
+import com.evnict.tabletennis.service.DrawCalculationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
@@ -1318,7 +1319,16 @@ public class TournamentController {
         touchMetadataVersion(tournament);
         tournamentRepository.save(tournament);
 
-        appendTournamentMatchEvent(id, "Chốt bốc thăm", "Chốt bốc thăm giải đấu: " + request.candidateId + ". Lý do: " + request.reason, request.actorId, request.reason, request.requestId);
+        TournamentMatchEvent event = new TournamentMatchEvent();
+        event.setId("e" + UUID.randomUUID().toString().substring(0, 10));
+        event.setTournamentId(id);
+        event.setMatchKey("draw-commit");
+        event.setActionType("CHOT_BOC_THAM");
+        event.setPayloadJson(request.candidateId != null ? request.candidateId : "");
+        event.setActorId(isBlank(request.actorId) ? "SYSTEM" : request.actorId);
+        event.setRequestId(request.requestId);
+        event.setCreatedAt(LocalDateTime.now());
+        tournamentMatchEventRepository.save(event);
 
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
@@ -1525,7 +1535,16 @@ public class TournamentController {
         touchMetadataVersion(tournament);
         tournamentRepository.save(tournament);
 
-        appendTournamentMatchEvent(id, "Tái bốc thăm", "Tái bốc thăm lại từ danh sách hạt giống mới. Lý do: " + request.reason, request.actorId, request.reason, request.requestId);
+        TournamentMatchEvent event = new TournamentMatchEvent();
+        event.setId("e" + UUID.randomUUID().toString().substring(0, 10));
+        event.setTournamentId(id);
+        event.setMatchKey("draw-rebuild");
+        event.setActionType("TAI_BOC_THAM");
+        event.setPayloadJson("rebuild");
+        event.setActorId(isBlank(request.actorId) ? "SYSTEM" : request.actorId);
+        event.setRequestId(request.requestId);
+        event.setCreatedAt(LocalDateTime.now());
+        tournamentMatchEventRepository.save(event);
 
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
