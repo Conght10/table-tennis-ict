@@ -223,42 +223,61 @@ public class TournamentController {
         // Synchronize registrations (seeds, seedSource, isCaptain, etc.) if provided in the request
         if (updatedData.getRegistrations() != null && !updatedData.getRegistrations().isEmpty()) {
             List<TournamentRegistration> existingRegs = tournamentRegistrationRepository.findByTournamentId(id);
-            Map<String, TournamentRegistration> existingRegMap = existingRegs.stream()
-                    .collect(Collectors.toMap(TournamentRegistration::getMemberId, r -> r, (r1, r2) -> r1));
+            if (!existingRegs.isEmpty()) {
+                // Step 1: Temporarily set negative seeds and flush to avoid uk_tournament_seed unique constraint conflict during reordering
+                for (int i = 0; i < existingRegs.size(); i++) {
+                    existingRegs.get(i).setSeed(-1000 - i);
+                }
+                tournamentRegistrationRepository.saveAllAndFlush(existingRegs);
 
-            for (Object regObj : updatedData.getRegistrations()) {
-                try {
-                    TournamentRegistration incoming = OBJECT_MAPPER.convertValue(regObj, TournamentRegistration.class);
-                    if (incoming != null && incoming.getMemberId() != null) {
-                        TournamentRegistration existing = existingRegMap.get(incoming.getMemberId());
-                        if (existing != null) {
-                            if (incoming.getSeed() != null) {
-                                existing.setSeed(incoming.getSeed());
+                // Step 2: Map incoming registration changes by memberId
+                Map<String, TournamentRegistration> existingRegMap = existingRegs.stream()
+                        .collect(Collectors.toMap(TournamentRegistration::getMemberId, r -> r, (r1, r2) -> r1));
+
+                for (Object regObj : updatedData.getRegistrations()) {
+                    if (regObj instanceof Map<?, ?> regMap) {
+                        Object memberIdObj = regMap.get("memberId");
+                        if (memberIdObj != null) {
+                            String memberId = memberIdObj.toString();
+                            TournamentRegistration existing = existingRegMap.get(memberId);
+                            if (existing != null) {
+                                Object seedObj = regMap.get("seed");
+                                if (seedObj instanceof Number num) {
+                                    existing.setSeed(num.intValue());
+                                } else if (seedObj != null) {
+                                    try {
+                                        existing.setSeed(Integer.parseInt(seedObj.toString()));
+                                    } catch (NumberFormatException ignored) {}
+                                }
+
+                                Object seedSourceObj = regMap.get("seedSource");
+                                if (seedSourceObj != null) {
+                                    existing.setSeedSource(seedSourceObj.toString());
+                                }
+
+                                Object isCaptainObj = regMap.get("isCaptain");
+                                if (isCaptainObj instanceof Boolean b) {
+                                    existing.setIsCaptain(b);
+                                } else if (isCaptainObj != null) {
+                                    existing.setIsCaptain(Boolean.parseBoolean(isCaptainObj.toString()));
+                                }
                             }
-                            if (incoming.getSeedSource() != null) {
-                                existing.setSeedSource(incoming.getSeedSource());
-                            }
-                            if (incoming.getIsCaptain() != null) {
-                                existing.setIsCaptain(incoming.getIsCaptain());
-                            }
-                            if (incoming.getRankSnapshot() != null) {
-                                existing.setRankSnapshot(incoming.getRankSnapshot());
-                            }
-                            if (incoming.getEloSnapshot() != null) {
-                                existing.setEloSnapshot(incoming.getEloSnapshot());
-                            }
-                            if (incoming.getGenderSnapshot() != null) {
-                                existing.setGenderSnapshot(incoming.getGenderSnapshot());
-                            }
-                            if (incoming.getDepartmentSnapshot() != null) {
-                                existing.setDepartmentSnapshot(incoming.getDepartmentSnapshot());
-                            }
-                            tournamentRegistrationRepository.save(existing);
                         }
                     }
-                } catch (Exception e) {
-                    // Ignore conversion errors for transient objects
                 }
+
+                // Step 3: Ensure any registration that still has a negative seed gets a valid positive seed
+                int fallbackSeed = 1;
+                for (TournamentRegistration reg : existingRegs) {
+                    if (reg.getSeed() == null || reg.getSeed() < 0) {
+                        while (isSeedUsed(existingRegs, fallbackSeed)) {
+                            fallbackSeed++;
+                        }
+                        reg.setSeed(fallbackSeed++);
+                    }
+                }
+
+                tournamentRegistrationRepository.saveAll(existingRegs);
             }
         }
 
@@ -2061,6 +2080,10 @@ public class TournamentController {
         return ResponseEntity.ok().build();
     }
 
+    private boolean isSeedUsed(List<TournamentRegistration> list, int seed) {
+        return list.stream().anyMatch(r -> r.getSeed() != null && r.getSeed() == seed);
+    }
+
     private Optional<Tournament> findTournamentByIdHydrated(String id) {
         Optional<Tournament> tournamentOpt = tournamentRepository.findById(id);
         tournamentOpt.ifPresent(this::hydrateTournamentState);
@@ -2105,7 +2128,7 @@ public class TournamentController {
         }
 
         // Hydrate Registrations & Auto Backfill if registrations are empty
-        List<TournamentRegistration> regs = tournamentRegistrationRepository.findByTournamentId(tournament.getId());
+        List<TournamentRegistration> regs = tournamentRegistrationRepository.findByTournamentIdOrderBySeedAsc(tournament.getId());
         List<String> participants = tournament.getParticipants();
         if (regs.isEmpty() && participants != null && !participants.isEmpty()) {
             regs = new ArrayList<>();

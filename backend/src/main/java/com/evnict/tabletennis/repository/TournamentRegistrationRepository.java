@@ -8,6 +8,7 @@ import java.util.Optional;
 
 public interface TournamentRegistrationRepository extends JpaRepository<TournamentRegistration, TournamentRegistrationId> {
     List<TournamentRegistration> findByTournamentId(String tournamentId);
+    List<TournamentRegistration> findByTournamentIdOrderBySeedAsc(String tournamentId);
     Optional<TournamentRegistration> findByTournamentIdAndMemberId(String tournamentId, String memberId);
     boolean existsByTournamentIdAndSeed(String tournamentId, Integer seed);
 }
