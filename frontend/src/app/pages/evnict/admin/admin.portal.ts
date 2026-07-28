@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
+import { CdkDragDrop, moveItemInArray, DragDropModule } from '@angular/cdk/drag-drop';
 import { FormsModule } from '@angular/forms';
 import { ChartModule } from 'primeng/chart';
 import { TableModule } from 'primeng/table';
@@ -17,7 +18,7 @@ import { Router, ActivatedRoute } from '@angular/router';
 @Component({
     selector: 'app-evnict-admin-portal',
     standalone: true,
-    imports: [CommonModule, FormsModule, ChartModule, TableModule, ButtonModule, SelectModule, TagModule, DialogModule, InputTextModule, DatePickerModule, InputNumberModule],
+    imports: [CommonModule, FormsModule, ChartModule, TableModule, ButtonModule, SelectModule, TagModule, DialogModule, InputTextModule, DatePickerModule, InputNumberModule, DragDropModule],
     template: `
         <div class="portal-shell grid grid-cols-12 gap-6">
 
@@ -545,10 +546,7 @@ import { Router, ActivatedRoute } from '@angular/router';
                                      Tổng Quan & Giải Thưởng
                                  </button>
                                  <button type="button" class="tournament-tab-btn" [class.is-active]="detailTab === 'players'" (click)="detailTab = 'players'">
-                                     Đội hình & VĐV ({{ currTournament.participants?.length || 0 }})
-                                 </button>
-                                 <button type="button" class="tournament-tab-btn" [class.is-active]="detailTab === 'registrations'" (click)="detailTab = 'registrations'">
-                                     Đăng Ký & Hạt Giống
+                                     VĐV & Đội Hình ({{ currTournament.participants?.length || 0 }})
                                  </button>
                                  <button type="button" class="tournament-tab-btn" [class.is-active]="detailTab === 'group'" [disabled]="currTournament.status === 'draft'" (click)="detailTab = 'group'">
                                      Vòng Bảng & Kết Quả
@@ -659,7 +657,7 @@ import { Router, ActivatedRoute } from '@angular/router';
                                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4" *ngIf="currTournament.status !== 'draft'">
                                      <div class="p-4 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent dark:from-indigo-950/20 dark:via-purple-950/5 dark:to-transparent rounded-xl border border-indigo-500/20 dark:border-indigo-900/30 flex items-center justify-between shadow-sm">
                                          <div class="space-y-1">
-                                             <span class="text-indigo-650 dark:text-indigo-400 text-[10px] uppercase font-black tracking-wider">Tiến Độ Giải Đấu</span>
+                                             <span class="text-indigo-600 dark:text-indigo-400 text-[10px] uppercase font-black tracking-wider">Tiến Độ Giải Đấu</span>
                                              <h3 class="text-xl font-black m-0 text-slate-800 dark:text-slate-100">
                                                  {{ getTournamentProgressPercent(currTournament) }}%
                                              </h3>
@@ -707,363 +705,530 @@ import { Router, ActivatedRoute } from '@angular/router';
                               </div>
 
                               <div *ngIf="detailTab === 'players'" class="space-y-6">
-                                 <!-- Warning Banner for deficit teams -->
-                                 <div class="p-4 bg-orange-50/80 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 rounded-xl mb-4 flex items-center justify-between" *ngIf="hasDeficitTeams() && currTournament.status === 'ongoing'">
-                                     <div class="flex items-center gap-3">
-                                         <i class="pi pi-exclamation-triangle text-orange-500 text-xl animate-pulse"></i>
-                                         <div>
-                                             <h5 class="text-sm font-bold text-orange-850 dark:text-orange-300 m-0">Đội hình giải đấu đang bị thiếu người!</h5>
-                                             <p class="text-xs text-orange-650 dark:text-orange-400 m-0 mt-0.5">
-                                                 Có đội bóng thiếu thành viên do có VĐV rút giải. Các bảng đấu liên quan cần được tái cấu trúc lịch thi đấu.
-                                             </p>
-                                         </div>
-                                     </div>
-                                     <div class="flex items-center gap-2">
-                                         <button class="px-3.5 py-2 bg-orange-600 text-white rounded text-xs font-bold hover:bg-orange-700 transition cursor-pointer border-none shadow-sm flex items-center gap-1.5" (click)="rebalanceDeficitTeams()">
-                                             <i class="pi pi-sync"></i> Tái cấu trúc đội + bảng
-                                         </button>
-                                         <button class="px-3.5 py-2 bg-white text-orange-700 border border-orange-300 rounded text-xs font-bold hover:bg-orange-50 transition cursor-pointer shadow-sm flex items-center gap-1.5" (click)="toggleManualRestructureMode()">
-                                             <i class="pi pi-sliders-h"></i> Chỉnh tay kéo-thả
-                                         </button>
-                                     </div>
-                                 </div>
+                                  <!-- Warning Banner for deficit teams -->
+                                  <div class="p-4 bg-orange-50/80 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 rounded-xl mb-4 flex items-center justify-between" *ngIf="hasDeficitTeams() && currTournament.status === 'ongoing'">
+                                      <div class="flex items-center gap-3">
+                                          <i class="pi pi-exclamation-triangle text-orange-500 text-xl animate-pulse"></i>
+                                          <div>
+                                              <h5 class="text-sm font-bold text-orange-850 dark:text-orange-300 m-0">Đội hình giải đấu đang bị thiếu người!</h5>
+                                              <p class="text-xs text-orange-650 dark:text-orange-400 m-0 mt-0.5">
+                                                  Có đội bóng thiếu thành viên do có VĐV rút giải. Các bảng đấu liên quan cần được tái cấu trúc lịch thi đấu.
+                                              </p>
+                                          </div>
+                                      </div>
+                                      <div class="flex items-center gap-2">
+                                          <button class="px-3.5 py-2 bg-orange-600 text-white rounded text-xs font-bold hover:bg-orange-700 transition cursor-pointer border-none shadow-sm flex items-center gap-1.5" (click)="rebalanceDeficitTeams()">
+                                              <i class="pi pi-sync"></i> Tái cấu trúc đội + bảng
+                                          </button>
+                                          <button class="px-3.5 py-2 bg-white text-orange-700 border border-orange-300 rounded text-xs font-bold hover:bg-orange-50 transition cursor-pointer shadow-sm flex items-center gap-1.5" (click)="toggleManualRestructureMode()">
+                                              <i class="pi pi-sliders-h"></i> Chỉnh tay kéo-thả
+                                          </button>
+                                      </div>
+                                  </div>
 
-                                 <div class="p-4 border border-primary-200 dark:border-primary-900 rounded-xl bg-primary-50/40 dark:bg-primary-950/20 space-y-4 mb-5" *ngIf="showManualRestructure && currTournament.type === 'team' && currTournament.status === 'ongoing'">
-                                     <div class="flex items-center justify-between">
-                                         <div>
-                                             <h5 class="m-0 text-sm font-black text-primary-700 dark:text-primary-300">Chỉnh tay đội/bảng bằng kéo-thả</h5>
-                                             <p class="m-0 mt-1 text-xs text-slate-600 dark:text-slate-300">
-                                                 Bước 1: Kéo VĐV sang đội khác để cân lại quân số. Bước 2: Kéo đội sang bảng khác để cân bảng. Sau cùng bấm nút dựng lại lịch đấu.
-                                             </p>
-                                         </div>
-                                         <button class="px-2.5 py-1 border border-slate-300 dark:border-slate-700 rounded text-[11px] font-bold bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800" (click)="showManualRestructure = false">
-                                             Đóng
-                                         </button>
-                                     </div>
+                                  <div class="p-4 border border-primary-200 dark:border-primary-900 rounded-xl bg-primary-50/40 dark:bg-primary-950/20 space-y-4 mb-5" *ngIf="showManualRestructure && currTournament.type === 'team' && currTournament.status === 'ongoing'">
+                                      <div class="flex items-center justify-between">
+                                          <div>
+                                              <h5 class="m-0 text-sm font-black text-primary-700 dark:text-primary-300">Chỉnh tay đội/bảng bằng kéo-thả</h5>
+                                              <p class="m-0 mt-1 text-xs text-slate-600 dark:text-slate-300">
+                                                  Bước 1: Kéo VĐV sang đội khác để cân lại quân số. Bước 2: Kéo đội sang bảng khác để cân bảng. Sau cùng bấm nút dựng lại lịch đấu.
+                                              </p>
+                                          </div>
+                                          <button class="px-2.5 py-1 border border-slate-300 dark:border-slate-700 rounded text-[11px] font-bold bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800" (click)="showManualRestructure = false">
+                                              Đóng
+                                          </button>
+                                      </div>
 
-                                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                         <div class="space-y-3">
-                                             <h6 class="m-0 text-xs font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Kéo VĐV để chỉnh đội</h6>
-                                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                 <div *ngFor="let team of currTournament.teams" class="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 space-y-2"
-                                                      (dragover)="allowDrop($event)" (drop)="onDropPlayerToTeam($event, team.id)">
-                                                     <div class="text-xs font-extrabold text-indigo-650 dark:text-indigo-350 flex items-center justify-between">
-                                                         <span>{{ team.name }}</span>
-                                                         <span class="px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 rounded text-[10px]">{{ team.players.length }}/{{ currTournament.teamSize || 3 }}</span>
-                                                     </div>
-                                                     <div class="space-y-1.5 min-h-[56px]">
-                                                         <div *ngFor="let p of team.players"
-                                                              draggable="true"
-                                                              (dragstart)="onPlayerDragStart(team.id, p.id)"
-                                                              class="px-2 py-1 rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-200 cursor-move flex items-center justify-between">
-                                                             <span>{{ p.name }}</span>
-                                                             <i class="pi pi-arrows-alt text-[10px] text-slate-400"></i>
-                                                         </div>
-                                                         <div *ngIf="!team.players.length" class="text-[10px] text-slate-400 italic">Thả VĐV vào đây</div>
-                                                     </div>
-                                                 </div>
-                                             </div>
-                                         </div>
+                                      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                          <div class="space-y-3">
+                                              <h6 class="m-0 text-xs font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Kéo VĐV để chỉnh đội</h6>
+                                              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                  <div *ngFor="let team of currTournament.teams" class="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 space-y-2"
+                                                       (dragover)="allowDrop($event)" (drop)="onDropPlayerToTeam($event, team.id)">
+                                                      <div class="text-xs font-extrabold text-indigo-600 dark:text-indigo-355 flex items-center justify-between">
+                                                          <span>{{ team.name }}</span>
+                                                          <span class="px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 rounded text-[10px]">{{ team.players.length }}/{{ currTournament.teamSize || 3 }}</span>
+                                                      </div>
+                                                      <div class="space-y-1.5 min-h-[56px]">
+                                                          <div *ngFor="let p of team.players"
+                                                               draggable="true"
+                                                               (dragstart)="onPlayerDragStart(team.id, p.id)"
+                                                               class="px-2 py-1 rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-200 cursor-move flex items-center justify-between">
+                                                              <span>{{ p.name }}</span>
+                                                              <i class="pi pi-arrows-alt text-[10px] text-slate-400"></i>
+                                                          </div>
+                                                          <div *ngIf="!team.players.length" class="text-[10px] text-slate-400 italic">Thả VĐV vào đây</div>
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                          </div>
 
-                                         <div class="space-y-3">
-                                             <h6 class="m-0 text-xs font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Kéo đội để chỉnh bảng</h6>
-                                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                 <div *ngFor="let g of currTournament.groups" class="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 space-y-2"
-                                                      (dragover)="allowDrop($event)" (drop)="onDropCompetitorToGroup($event, g.groupName)">
-                                                     <div class="text-xs font-extrabold text-emerald-650 dark:text-emerald-350">Bảng {{ g.groupName }}</div>
-                                                     <div class="space-y-1.5 min-h-[56px]">
-                                                         <div *ngFor="let comp of g.competitors"
-                                                              draggable="true"
-                                                              (dragstart)="onCompetitorDragStart(g.groupName, comp.id)"
-                                                              class="px-2 py-1 rounded bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 text-[11px] font-semibold text-emerald-800 dark:text-emerald-250 cursor-move flex items-center justify-between">
-                                                             <span>{{ comp.name }}</span>
-                                                             <span class="text-[10px] text-emerald-700 dark:text-emerald-350">{{ getTeamPlayerCount(comp.id) }} VĐV</span>
-                                                         </div>
-                                                         <div *ngIf="!g.competitors.length" class="text-[10px] text-slate-400 italic">Thả đội vào đây</div>
-                                                     </div>
-                                                 </div>
-                                             </div>
-                                         </div>
-                                     </div>
+                                          <div class="space-y-3">
+                                              <h6 class="m-0 text-xs font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Kéo đội để chỉnh bảng</h6>
+                                              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                  <div *ngFor="let g of currTournament.groups" class="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 space-y-2"
+                                                       (dragover)="allowDrop($event)" (drop)="onDropCompetitorToGroup($event, g.groupName)">
+                                                      <div class="text-xs font-extrabold text-emerald-650 dark:text-emerald-350">Bảng {{ g.groupName }}</div>
+                                                      <div class="space-y-1.5 min-h-[56px]">
+                                                          <div *ngFor="let comp of g.competitors"
+                                                               draggable="true"
+                                                               (dragstart)="onCompetitorDragStart(g.groupName, comp.id)"
+                                                               class="px-2 py-1 rounded bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 text-[11px] font-semibold text-emerald-800 dark:text-emerald-250 cursor-move flex items-center justify-between">
+                                                              <span>{{ comp.name }}</span>
+                                                              <span class="text-[10px] text-emerald-700 dark:text-emerald-350">{{ getTeamPlayerCount(comp.id) }} VĐV</span>
+                                                          </div>
+                                                          <div *ngIf="!g.competitors.length" class="text-[10px] text-slate-400 italic">Thả đội vào đây</div>
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      </div>
 
-                                     <div class="flex justify-end pt-2 border-t border-slate-200 dark:border-slate-800">
-                                         <button class="px-3.5 py-2 bg-primary text-white rounded text-xs font-bold hover:bg-primary-600 transition cursor-pointer border-none shadow-sm flex items-center gap-1.5" (click)="rebuildGroupScheduleFromCurrentGroups()">
-                                             <i class="pi pi-refresh"></i> Dựng lại lịch bảng từ cấu hình hiện tại
-                                         </button>
-                                     </div>
-                                 </div>
-                                <!-- Section 1: Individual registered players (hidden once teams are created) -->
-                                <div class="mb-6">
-                                    <div class="flex items-center justify-between mb-3">
-                                        <h4 class="text-base font-bold flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
-                                            <i class="pi pi-users text-primary"></i> 1. Danh sách cá nhân đăng ký tham gia
-                                        </h4>
-                                        <button *ngIf="currTournament.status === 'draft' && currTournament.type === 'single'" class="px-3.5 py-2 bg-indigo-650 text-white rounded text-xs font-bold hover:bg-indigo-755 transition shadow-sm flex items-center gap-1" [disabled]="(currTournament.participants?.length || 0) < 4" (click)="drawTournament(currTournament.id)">
-                                            <i class="pi pi-sitemap"></i> Bốc Thăm Chia Bảng
-                                        </button>
-                                    </div>
+                                      <div class="flex justify-end pt-2 border-t border-slate-200 dark:border-slate-800">
+                                          <button class="px-3.5 py-2 bg-primary text-white rounded text-xs font-bold hover:bg-primary-600 transition cursor-pointer border-none shadow-sm flex items-center gap-1.5" (click)="rebuildGroupScheduleFromCurrentGroups()">
+                                              <i class="pi pi-refresh"></i> Dựng lại lịch bảng từ cấu hình hiện tại
+                                          </button>
+                                      </div>
+                                  </div>
 
-                                    <div class="overflow-auto border rounded-lg max-h-[300px]">
-                                        <table class="w-full border-collapse text-left text-xs">
-                                            <thead>
-                                                <tr class="bg-surface-50 border-b">
-                                                    <th class="py-2.5 px-3">Họ và tên</th>
-                                                    <th class="py-2.5 px-3">Phòng ban</th>
-                                                    <th class="py-2.5 px-3 text-center">Phân hạng</th>
-                                                    <th class="py-2.5 px-3 text-center" *ngIf="currTournament.type === 'team' && currTournament.status === 'draft'">Đội trưởng</th>
-                                                    <th class="py-2.5 px-3 text-center" *ngIf="currTournament.status !== 'finished'">Thao tác</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr *ngFor="let pid of getSortedParticipants()" class="border-b hover:bg-surface-50">
-                                                    <td class="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-100">{{ memberName(pid) }}</td>
-                                                    <td class="py-2.5 px-3">{{ getMemberDepartment(pid) }}</td>
-                                                    <td class="py-2.5 px-3 text-center font-bold text-primary">Hạng {{ getMemberRank(pid) }}</td>
-                                                    <td class="py-2.5 px-3 text-center" *ngIf="currTournament.type === 'team' && currTournament.status === 'draft'">
-                                                        <input type="checkbox" [checked]="isCaptain(pid)" (change)="toggleCaptain(pid)" class="cursor-pointer h-4 w-4 rounded border-slate-350 text-primary" />
-                                                    </td>
-                                                    <td class="py-2.5 px-3 text-center" *ngIf="currTournament.status !== 'finished'">
-                                                        <button class="px-2 py-1 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 rounded text-xxs font-bold transition cursor-pointer border-none" (click)="removePlayerFromTournament(pid)">
-                                                            {{ currTournament.status === 'ongoing' ? 'Rút khỏi giải' : 'Xóa' }}
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                                <tr *ngIf="!currTournament.participants?.length">
-                                                    <td colspan="5" class="text-center py-8 text-slate-400">
-                                                        Chưa có đấu thủ nào đăng ký tham gia.
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
+                                  <!-- Section 1: Unified Registered VĐV & Seeding Table -->
+                                  <div class="card shadow-sm border border-surface-200 p-4">
+                                      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                                          <h4 class="text-base font-bold flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
+                                              <i class="pi pi-users text-primary"></i> 1. Danh sách VĐV & Thứ tự hạt giống
+                                          </h4>
+                                          <div class="flex gap-2" *ngIf="currTournament.status === 'draft'">
+                                              <button type="button" class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 transition cursor-pointer border-none flex items-center gap-1" (click)="triggerImportRegistrations()">
+                                                  <i class="pi pi-file-import"></i> Nhập Đăng Ký (CSV)
+                                              </button>
+                                          </div>
+                                      </div>
 
-                                <!-- Section 2: Teams assignment section (only for Double / Team formats) -->
-                                <div *ngIf="currTournament.type === 'team' || currTournament.type === 'double'" class="space-y-4">
-                                    
-                                    <!-- Sub-state A: Teams generated but groups NOT drawn yet -->
-                                    <div *ngIf="currTournament.teams && currTournament.teams.length > 0 && (!currTournament.groups || currTournament.groups.length === 0)">
-                                        <div class="flex items-center justify-between mb-3 border-b pb-2">
-                                            <h4 class="text-base font-bold flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
-                                                <i class="pi pi-users text-primary"></i> Danh sách các đội đã phân chia
-                                            </h4>
-                                            <button *ngIf="currTournament.status === 'draft'" class="px-3.5 py-2 bg-indigo-600 text-white rounded text-xs font-extrabold hover:bg-indigo-755 transition shadow-sm flex items-center gap-1" [disabled]="(currTournament.participants?.length || 0) < 4" (click)="drawTournament(currTournament.id)">
-                                                <i class="pi pi-sitemap"></i> Bốc Thăm Chia Bảng
-                                            </button>
-                                        </div>
+                                      <div class="overflow-auto border rounded-lg max-h-[350px]">
+                                          <table class="w-full border-collapse text-left text-xs">
+                                              <thead>
+                                                  <tr class="bg-surface-50 border-b">
+                                                      <th *ngIf="currTournament.drawRevisionCurrent === 0 && currTournament.status === 'draft'" class="py-2 px-2 w-8 text-center text-slate-400" title="Kéo để sắp xếp thứ tự hạt giống">
+                                                          <i class="pi pi-sort-alt text-xs"></i>
+                                                      </th>
+                                                      <th class="py-2.5 px-3">Họ và tên</th>
+                                                      <th class="py-2.5 px-3">Phòng ban</th>
+                                                      <th class="py-2.5 px-3 text-center">Giới tính</th>
+                                                      <th class="py-2.5 px-3 text-center">ELO</th>
+                                                      <th class="py-2.5 px-3 text-center">Phân hạng</th>
+                                                      <th class="py-2.5 px-3 text-center">Hạt giống (Seed)</th>
+                                                      <th class="py-2.5 px-3 text-center" *ngIf="currTournament.type === 'team' && currTournament.status === 'draft'">Đội trưởng</th>
+                                                      <th class="py-2.5 px-3 text-center" *ngIf="currTournament.status !== 'finished'">Thao tác</th>
+                                                  </tr>
+                                              </thead>
+                                              <tbody cdkDropList [cdkDropListDisabled]="currTournament.drawRevisionCurrent !== 0 || currTournament.status !== 'draft'" (cdkDropListDropped)="onSeedDrop($event)" class="[&_.cdk-drag-placeholder]:opacity-30 [&_.cdk-drag-placeholder]:bg-indigo-50">
+                                                  <tr *ngFor="let reg of getSortedRegistrations()" cdkDrag [cdkDragDisabled]="currTournament.drawRevisionCurrent !== 0 || currTournament.status !== 'draft'" class="border-b hover:bg-surface-50 [&.cdk-drag-animating]:transition-transform">
+                                                      <!-- Drag handle (only in pre-draw draft mode) -->
+                                                      <td *ngIf="currTournament.drawRevisionCurrent === 0 && currTournament.status === 'draft'" cdkDragHandle class="py-2.5 px-2 text-center cursor-grab active:cursor-grabbing text-slate-300 hover:text-indigo-500 transition-colors select-none">
+                                                          <i class="pi pi-bars text-xs"></i>
+                                                      </td>
+                                                      <td class="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-100">
+                                                          {{ memberName(reg.memberId) }}
+                                                      </td>
+                                                      <td class="py-2.5 px-3 text-slate-500 dark:text-slate-400">
+                                                          {{ reg.departmentSnapshot || getMemberDepartment(reg.memberId) || 'N/A' }}
+                                                      </td>
+                                                      <td class="py-2.5 px-3 text-center">
+                                                          {{ reg.genderSnapshot || getMemberGender(reg.memberId) }}
+                                                      </td>
+                                                      <td class="py-2.5 px-3 text-center font-bold text-slate-700 dark:text-slate-300">
+                                                          {{ reg.eloSnapshot || getMemberElo(reg.memberId) }}
+                                                      </td>
+                                                      <td class="py-2.5 px-3 text-center">
+                                                          <span class="font-bold text-primary">Hạng {{ reg.rankSnapshot || getMemberRank(reg.memberId) }}</span>
+                                                      </td>
+                                                      <td class="py-2.5 px-3 text-center">
+                                                          <!-- Inline Seeding Editor for Draft / Pre-draw stage -->
+                                                          <ng-container *ngIf="currTournament.drawRevisionCurrent === 0; else postDrawSeeding">
+                                                              <input type="number" min="1" [value]="reg.seed" (change)="onSeedInlineChange(reg, $event)" 
+                                                                     class="w-14 px-1.5 py-0.5 text-xs border rounded text-center font-extrabold text-indigo-600 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+                                                          </ng-container>
+                                                          <!-- Dialog/History Seeding Editor for Post-draw stage -->
+                                                          <ng-template #postDrawSeeding>
+                                                              <span class="inline-flex items-center gap-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1 rounded" (click)="openSeedEditDialog(reg)">
+                                                                  <span class="font-extrabold text-indigo-600">{{ reg.seed }}</span>
+                                                                  <i class="pi pi-pencil text-[9px] text-slate-400"></i>
+                                                              </span>
+                                                          </ng-template>
+                                                      </td>
+                                                      <td class="py-2.5 px-3 text-center" *ngIf="currTournament.type === 'team' && currTournament.status === 'draft'">
+                                                          <input type="checkbox" [checked]="isCaptain(reg.memberId)" (change)="toggleCaptain(reg.memberId)" class="cursor-pointer h-4 w-4 rounded border-slate-350 text-primary" />
+                                                      </td>
+                                                      <td class="py-2.5 px-3 text-center" *ngIf="currTournament.status !== 'finished'">
+                                                          <button class="px-2 py-1 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 rounded text-xxs font-bold transition cursor-pointer border-none" (click)="removePlayerFromTournament(reg.memberId)">
+                                                              {{ currTournament.status === 'ongoing' ? 'Rút giải' : 'Xóa' }}
+                                                          </button>
+                                                      </td>
+                                                  </tr>
+                                                  <tr *ngIf="!currTournament.registrations?.length">
+                                                      <td [attr.colspan]="currTournament.type === 'team' ? 8 : 7" class="text-center py-8 text-slate-400">
+                                                          Chưa có đấu thủ nào đăng ký tham gia. Sử dụng khung checklist "Thêm vận động viên" ở cột trái để thiết lập danh sách.
+                                                      </td>
+                                                  </tr>
+                                              </tbody>
+                                          </table>
+                                      </div>
+                                  </div>
 
-                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div *ngFor="let team of currTournament.teams" class="p-3.5 border rounded-xl bg-surface-50 dark:bg-slate-900/60 shadow-sm space-y-3">
-                                                <div class="font-extrabold text-sm text-indigo-600 flex justify-between items-center border-b pb-1.5">
-                                                    <span>{{ team.name }}</span>
-                                                    <span class="text-xxs px-2 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 rounded-full font-bold">Đội đồng bộ</span>
-                                                </div>
-                                                <div class="space-y-2">
-                                                    <div *ngFor="let p of team.players; let pIdx = index" class="flex justify-between items-center text-xs">
-                                                        <span class="font-semibold flex items-center" [class.text-primary]="pIdx === 0" [class.font-bold]="pIdx === 0">
-                                                            <i class="pi" [class.pi-star-fill]="pIdx === 0" [class.text-amber-500]="pIdx === 0" [class.pi-user]="pIdx > 0" [class.text-slate-400]="pIdx > 0" class="mr-1.5 text-xs"></i>
-                                                            {{ p.name }} <span class="text-slate-450 font-normal ml-1">(Hạng {{ getMemberRank(p.id) }})</span>
-                                                        </span>
-                                                        <span class="text-[10px] px-1.5 py-0.2 rounded font-bold" [class.bg-amber-100]="pIdx === 0" [class.text-amber-800]="pIdx === 0" [class.bg-slate-100]="pIdx > 0" [class.text-slate-500]="pIdx > 0">
-                                                            {{ pIdx === 0 ? 'Đội trưởng' : 'Thành viên' }}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                  <!-- Section 2: Teams assignment section (only for Double / Team formats) -->
+                                  <div *ngIf="currTournament.type === 'team' || currTournament.type === 'double'" class="space-y-4">
+                                      
+                                      <!-- Sub-state A: Teams generated but groups NOT drawn yet -->
+                                      <div *ngIf="currTournament.teams && currTournament.teams.length > 0 && (!currTournament.groups || currTournament.groups.length === 0)">
+                                          <div class="flex items-center justify-between mb-3 border-b pb-2">
+                                              <h4 class="text-base font-bold flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
+                                                  <i class="pi pi-users text-primary"></i> 2. Danh sách các đội đã phân chia
+                                              </h4>
+                                              <div class="flex items-center gap-2">
+                                                  <button *ngIf="currTournament.status === 'draft'" class="px-3 py-1.5 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700 rounded text-xs font-bold hover:bg-red-100 transition flex items-center gap-1" (click)="clearTeams()">
+                                                      <i class="pi pi-trash"></i> Hủy đội hình
+                                                  </button>
+                                                  <button *ngIf="currTournament.status === 'draft'" class="px-3.5 py-2 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 transition shadow-sm flex items-center gap-1" [disabled]="(currTournament.participants?.length || 0) < 4" (click)="drawTournament(currTournament.id)">
+                                                      <i class="pi pi-sitemap"></i> Bốc Thăm Chia Bảng
+                                                  </button>
+                                              </div>
+                                          </div>
 
-                                    <!-- Sub-state B: Groups drawn -->
-                                    <div *ngIf="currTournament.groups && currTournament.groups.length > 0" class="space-y-4">
-                                        <div class="flex items-center justify-between mb-3 border-b pb-2">
-                                            <h4 class="text-base font-bold flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
-                                                <i class="pi pi-sitemap text-primary"></i> Kết quả phân bảng thi đấu các đội
-                                            </h4>
-                                            <div class="flex items-center gap-2">
-                                                <button *ngIf="currTournament.status === 'ongoing' && currTournament.type === 'team'" class="px-2.5 py-1 bg-white text-primary border border-primary/30 rounded text-xxs font-bold hover:bg-primary/5 transition" (click)="toggleManualRestructureMode()">
-                                                    {{ showManualRestructure ? 'Ẩn chỉnh tay' : 'Chỉnh tay kéo-thả' }}
-                                                </button>
-                                                <div class="text-xxs px-2.5 py-1 bg-green-50 text-green-700 border border-green-200 rounded-full font-extrabold flex items-center gap-1">
-                                                    <i class="pi pi-check"></i> ĐÃ CHIA BẢNG THÀNH CÔNG
-                                                </div>
-                                            </div>
-                                        </div>
+                                          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                              <div *ngFor="let team of currTournament.teams" class="p-3.5 border rounded-xl bg-surface-50 dark:bg-slate-900/60 shadow-sm space-y-3">
+                                                  <div class="font-extrabold text-sm text-indigo-600 flex justify-between items-center border-b pb-1.5">
+                                                      <span>{{ team.name }}</span>
+                                                      <span class="text-xxs px-2 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 rounded-full font-bold">Đội đồng bộ</span>
+                                                  </div>
+                                                  <div class="space-y-2">
+                                                      <div *ngFor="let p of team.players; let pIdx = index" class="flex justify-between items-center text-xs">
+                                                          <span class="font-semibold flex items-center" [class.text-primary]="pIdx === 0" [class.font-bold]="pIdx === 0">
+                                                              <i class="pi" [class.pi-star-fill]="pIdx === 0" [class.text-amber-500]="pIdx === 0" [class.pi-user]="pIdx > 0" [class.text-slate-400]="pIdx > 0" class="mr-1.5 text-xs"></i>
+                                                              {{ p.name }} <span class="text-slate-450 font-normal ml-1">(Hạng {{ getMemberRank(p.id) }})</span>
+                                                          </span>
+                                                          <span class="text-[10px] px-1.5 py-0.2 rounded font-bold" [class.bg-amber-100]="pIdx === 0" [class.text-amber-800]="pIdx === 0" [class.bg-slate-100]="pIdx > 0" [class.text-slate-500]="pIdx > 0">
+                                                              {{ pIdx === 0 ? 'Đội trưởng' : 'Thành viên' }}
+                                                          </span>
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      </div>
 
-                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div *ngFor="let g of currTournament.groups" class="p-4 border border-surface-200 rounded-xl bg-surface-50 dark:bg-surface-800 shadow-inner space-y-3">
-                                                <div class="font-black text-sm text-primary pb-1.5 border-b border-surface-200 flex justify-between items-center">
-                                                    <span>BẢNG {{ g.groupName }}</span>
-                                                    <span class="text-xxs px-2.5 py-0.5 bg-primary/10 text-primary rounded-full font-bold">Vòng loại</span>
-                                                </div>
-                                                <div class="space-y-2">
-                                                    <div *ngFor="let comp of g.competitors" class="p-3 bg-white dark:bg-slate-900 border border-surface-200 rounded-lg flex flex-col gap-2 shadow-sm">
-                                                        <div class="flex items-center gap-2 font-bold text-xs text-slate-800 dark:text-slate-200">
-                                                            <i class="pi pi-shield text-slate-400 text-xs"></i>
-                                                            <span>{{ comp.name }}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                      <!-- Sub-state B: Groups drawn -->
+                                      <div *ngIf="currTournament.groups && currTournament.groups.length > 0" class="space-y-4">
+                                               <div class="flex items-center justify-between mb-3 border-b pb-2">
+                                                   <h4 class="text-base font-bold flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
+                                                       <i class="pi pi-sitemap text-primary"></i> 2. Kết quả phân bảng thi đấu các đội
+                                                   </h4>
+                                                   <div class="flex items-center gap-2 flex-wrap">
+                                                       <button *ngIf="currTournament.status === 'draft'" class="px-3 py-1.5 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700 rounded text-xs font-bold hover:bg-red-100 transition flex items-center gap-1" (click)="clearTeams()">
+                                                           <i class="pi pi-trash"></i> Hủy đội hình
+                                                       </button>
+                                                       <button *ngIf="currTournament.status === 'draft'" class="px-3 py-1.5 bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded text-xs font-bold hover:bg-amber-200 transition flex items-center gap-1" (click)="drawTournament(currTournament.id)">
+                                                           <i class="pi pi-sync"></i> Chia lại bảng
+                                                       </button>
+                                                       <button *ngIf="currTournament.status === 'ongoing' && currTournament.type === 'team'" class="px-2.5 py-1 bg-white text-primary border border-primary/30 rounded text-xxs font-bold hover:bg-primary/5 transition" (click)="toggleManualRestructureMode()">
+                                                           {{ showManualRestructure ? 'Ẩn chỉnh tay' : 'Chỉnh tay kéo-thả' }}
+                                                       </button>
+                                                       <div class="text-xxs px-2.5 py-1 bg-green-50 text-green-700 border border-green-200 rounded-full font-extrabold flex items-center gap-1">
+                                                           <i class="pi pi-check"></i> ĐÃ CHIA BẢNG THÀNH CÔNG
+                                                       </div>
+                                                   </div>
+                                               </div>
+                                          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                              <div *ngFor="let g of currTournament.groups" class="p-4 border border-surface-200 rounded-xl bg-surface-50 dark:bg-surface-800 shadow-inner space-y-3">
+                                                  <div class="font-black text-sm text-primary pb-1.5 border-b border-surface-200 flex justify-between items-center">
+                                                      <span>BẢNG {{ g.groupName }}</span>
+                                                      <span class="text-xxs px-2.5 py-0.5 bg-primary/10 text-primary rounded-full font-bold">Vòng loại</span>
+                                                  </div>
+                                                  <div class="space-y-2">
+                                                      <div *ngFor="let comp of g.competitors" class="p-3 bg-white dark:bg-slate-900 border border-surface-200 rounded-lg flex flex-col gap-2 shadow-sm">
+                                                          <div class="flex items-center gap-2 font-bold text-xs text-slate-800 dark:text-slate-200">
+                                                              <i class="pi pi-shield text-slate-400 text-xs"></i>
+                                                              <span>{{ comp.name }}</span>
+                                                          </div>
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      </div>
 
-                                    <!-- Sub-state C: Draft tournament, no teams created yet -->
-                                    <div *ngIf="(!currTournament.teams || currTournament.teams.length === 0) && currTournament.status === 'draft'" class="py-8 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 text-xs">
-                                        <i class="pi pi-users block text-xl mb-1 text-slate-350"></i>
-                                        Chưa phân chia đội hình thi đấu. Chọn các VĐV làm Đội trưởng ở trên (nếu có), sau đó click nút dưới để phân đội.
-                                        <div class="mt-4 flex justify-center">
-                                            <button class="px-4 py-2 bg-primary text-white rounded text-xs font-bold hover:bg-primary-600 transition flex items-center gap-1 shadow-sm" [disabled]="(currTournament.participants?.length || 0) < 4" (click)="generateTeams()">
-                                                <i class="pi pi-users"></i> Chia Đội Ngẫu Nhiên & Cân Bằng Theo Hạng
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                                      <!-- Sub-state C: Draft tournament, no teams created yet -->
+                                      <div *ngIf="(!currTournament.teams || currTournament.teams.length === 0) && currTournament.status === 'draft'" class="space-y-4">
 
-                            <!-- Detail Tab Content: Registrations -->
-                            <div *ngIf="detailTab === 'registrations'" class="space-y-6">
-                                <div class="card shadow-sm border border-surface-200 p-4">
-                                    <div class="flex items-center justify-between mb-4">
-                                        <h4 class="text-base font-bold flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
-                                            <i class="pi pi-id-card text-primary"></i> Danh sách Đăng ký & Hạt giống theo Giải
-                                        </h4>
-                                        <div class="flex gap-2" *ngIf="currTournament.status === 'draft'">
-                                            <button type="button" class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 transition cursor-pointer border-none" (click)="triggerImportRegistrations()">
-                                                <i class="pi pi-file-import"></i> Import Đăng ký (JSON)
-                                            </button>
-                                        </div>
-                                    </div>
+                                          <!-- Manual Slot Builder Card -->
+                                          <div class="border border-indigo-200 dark:border-indigo-900 rounded-xl overflow-hidden shadow-sm">
+                                              <!-- Header (always visible) -->
+                                              <div class="flex items-center justify-between px-4 py-3 bg-indigo-50/70 dark:bg-indigo-950/30 cursor-pointer select-none" (click)="toggleManualSlotBuilder()">
+                                                  <div class="flex items-center gap-2">
+                                                      <i class="pi pi-lock text-indigo-600 text-sm"></i>
+                                                      <span class="text-xs font-black text-indigo-800 dark:text-indigo-300 uppercase tracking-wide">Phân đội thủ công (tuỳ chọn)</span>
+                                                      <span class="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                                                            [class.bg-indigo-100]="getLockedMemberCount() === 0"
+                                                            [class.text-indigo-500]="getLockedMemberCount() === 0"
+                                                            [class.bg-indigo-600]="getLockedMemberCount() > 0"
+                                                            [class.text-white]="getLockedMemberCount() > 0">
+                                                          {{ getLockedMemberCount() > 0 ? (getLockedMemberCount() + ' VĐV đã khoá') : 'Chưa khoá ai' }}
+                                                      </span>
+                                                  </div>
+                                                  <i class="pi text-indigo-500 text-xs transition-transform duration-200"
+                                                     [class.pi-chevron-down]="!showManualSlotBuilder"
+                                                     [class.pi-chevron-up]="showManualSlotBuilder"></i>
+                                              </div>
 
-                                    <div class="overflow-auto border rounded-lg">
-                                        <table class="w-full border-collapse text-left text-xs">
-                                            <thead>
-                                                <tr class="bg-surface-50 border-b">
-                                                    <th class="py-2.5 px-3">Họ và tên</th>
-                                                    <th class="py-2.5 px-3">Phòng ban</th>
-                                                    <th class="py-2.5 px-3 text-center">Giới tính</th>
-                                                    <th class="py-2.5 px-3 text-center">ELO Snapshot</th>
-                                                    <th class="py-2.5 px-3 text-center">Hạng Snapshot</th>
-                                                    <th class="py-2.5 px-3 text-center">Hạt giống (Seed)</th>
-                                                    <th class="py-2.5 px-3 text-center">Nguồn hạt giống</th>
-                                                    <th class="py-2.5 px-3 text-center">Trạng thái</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr *ngFor="let reg of currTournament.registrations" class="border-b hover:bg-surface-50">
-                                                    <td class="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-100">
-                                                        {{ memberName(reg.memberId) }}
-                                                    </td>
-                                                    <td class="py-2.5 px-3">{{ reg.departmentSnapshot || 'N/A' }}</td>
-                                                    <td class="py-2.5 px-3 text-center">{{ reg.genderSnapshot || 'N/A' }}</td>
-                                                    <td class="py-2.5 px-3 text-center font-bold text-slate-700">{{ reg.eloSnapshot }}</td>
-                                                    <td class="py-2.5 px-3 text-center font-bold text-primary">Hạng {{ reg.rankSnapshot }}</td>
-                                                    <td class="py-2.5 px-3 text-center">
-                                                        <span class="inline-flex items-center gap-1 cursor-pointer hover:bg-slate-100 px-2 py-1 rounded" (click)="openSeedEditDialog(reg)">
-                                                            <span class="font-extrabold text-indigo-650">{{ reg.seed }}</span>
-                                                            <i class="pi pi-pencil text-[9px] text-slate-400"></i>
-                                                        </span>
-                                                    </td>
-                                                    <td class="py-2.5 px-3 text-center">
-                                                        <span class="px-1.5 py-0.5 rounded text-[10px]" [ngClass]="{
-                                                            'bg-green-50 text-green-700 border border-green-200': reg.seedSource === 'auto',
-                                                            'bg-amber-50 text-amber-700 border border-amber-200': reg.seedSource === 'manual',
-                                                            'bg-indigo-50 text-indigo-700 border border-indigo-200': reg.seedSource === 'imported'
-                                                        }">
-                                                            {{ reg.seedSource }}
-                                                        </span>
-                                                    </td>
-                                                    <td class="py-2.5 px-3 text-center">
-                                                        <span class="px-1.5 py-0.5 rounded text-[10px]" [ngClass]="{
-                                                            'bg-green-50 text-green-700': reg.status === 'active',
-                                                            'bg-red-50 text-red-700': reg.status === 'withdrawn'
-                                                        }">
-                                                            {{ reg.status === 'active' ? 'Hoạt động' : 'Đã rút' }}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                                <tr *ngIf="!currTournament.registrations?.length">
-                                                    <td colspan="8" class="text-center py-8 text-slate-400">
-                                                        Chưa có dữ liệu đăng ký hạt giống cho giải đấu này.
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
+                                              <!-- Expanded body -->
+                                              <div *ngIf="showManualSlotBuilder" class="p-4 bg-white dark:bg-slate-900 space-y-4">
+                                                  <p class="text-[11px] text-slate-500 dark:text-slate-400 m-0 leading-relaxed">
+                                                      Khoá sẵn một số VĐV vào cùng 1 nhóm. Số VĐV còn lại sẽ được thuật toán chia đều theo hạng vào các đội (bao gồm điền nốt chỗ trống trong nhóm khoá).
+                                                  </p>
 
-                                <!-- Seed Override History panel -->
-                                <div class="card shadow-sm border border-surface-200 p-4" *ngIf="currTournament.seedOverrideHistory?.length">
-                                    <h5 class="text-sm font-bold mb-3 flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
-                                        <i class="pi pi-history text-slate-500"></i> Lịch sử điều chỉnh Hạt Giống
-                                    </h5>
-                                    <div class="space-y-3 max-h-[250px] overflow-auto pr-1">
-                                        <div *ngFor="let h of currTournament.seedOverrideHistory" class="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg text-xs space-y-1 relative border border-slate-100 dark:border-slate-800">
-                                            <div class="flex items-center justify-between text-[11px] text-slate-450 mb-1">
-                                                <span class="font-bold text-slate-700 dark:text-slate-200">VĐV: {{ memberName(h.memberId) }}</span>
-                                                <span>{{ h.overriddenAt | date:'dd/MM/yyyy HH:mm' }}</span>
-                                            </div>
-                                            <div class="font-medium text-slate-800 dark:text-slate-100">
-                                                Hạt giống: <span class="line-through text-red-500 font-bold mr-1">{{ h.oldSeed }}</span> &rarr; <span class="text-green-600 font-bold ml-1">{{ h.newSeed }}</span>
-                                            </div>
-                                            <div class="text-[11px] text-slate-500 dark:text-slate-400 italic">
-                                                Lý do: {{ h.reason }}
-                                            </div>
-                                            <div class="text-[10px] text-slate-450 text-right mt-1">
-                                                Thực hiện bởi: {{ memberName(h.actorId) }}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                                  <!-- Slot list -->
+                                                  <div class="space-y-3" *ngIf="currTournament.manualTeamSlots?.length">
+                                                      <div *ngFor="let slot of currTournament.manualTeamSlots"
+                                                           class="border rounded-lg overflow-hidden transition-all"
+                                                           [class.border-indigo-400]="activeSlotId === slot.slotId"
+                                                           [class.border-slate-200]="activeSlotId !== slot.slotId"
+                                                           [class.dark:border-indigo-700]="activeSlotId === slot.slotId"
+                                                           [class.dark:border-slate-800]="activeSlotId !== slot.slotId">
 
-                                <!-- Draw Revisions timeline and comparisons -->
-                                <div class="card shadow-sm border border-surface-200 p-4" *ngIf="currTournament.drawRevisions?.length">
-                                    <h5 class="text-sm font-bold mb-3 flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
-                                        <i class="pi pi-clone text-slate-500"></i> Các phiên bản Bốc Thăm (Revisions: {{ currTournament.drawRevisions?.length || 0 }})
-                                    </h5>
-                                    <div class="space-y-4">
-                                        <div *ngFor="let rev of currTournament.drawRevisions" class="p-3 border rounded-lg bg-surface-50 dark:bg-slate-850 text-xs">
-                                            <div class="flex items-center justify-between border-b pb-2 mb-2">
-                                                <span class="font-extrabold text-slate-800 dark:text-slate-100 text-sm">Bản vẽ #{{ rev.revisionNo }}</span>
-                                                <span class="px-2 py-0.5 rounded text-[10px] font-bold" [ngClass]="{
-                                                    'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400': rev.status === 'committed',
-                                                    'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400': rev.status === 'dirty'
-                                                }">
-                                                    {{ rev.status === 'committed' ? 'Đã Áp Dụng (Committed)' : 'Nháp / Chờ điều chỉnh (Dirty)' }}
-                                                </span>
-                                            </div>
-                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                    <div class="font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                                                        <i class="pi pi-users text-slate-400"></i> Cơ cấu đội hình:
-                                                    </div>
-                                                    <ul class="list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-400 m-0">
-                                                        <li *ngFor="let team of rev.teams">
-                                                            <strong>{{ team.teamName }}:</strong>
-                                                            <span>{{ team.memberIds.map(memberName).join(', ') }}</span>
-                                                            <span class="ml-1 text-[10px] bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 px-1 rounded font-bold">Tổng Seed: {{ team.seedTotal }}</span>
-                                                        </li>
-                                                    </ul>
-                                                </div>
-                                                <div>
-                                                    <div class="font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                                                        <i class="pi pi-sitemap text-slate-400"></i> Cơ cấu bảng đấu:
-                                                    </div>
-                                                    <ul class="list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-400 m-0">
-                                                        <li *ngFor="let g of rev.groups">
-                                                            <strong>Bảng {{ g.groupName }}:</strong>
-                                                            <span>{{ g.competitorIds.map(memberName).join(' &bull; ') }}</span>
-                                                        </li>
-                                                    </ul>
-                                                </div>
-                                            </div>
-                                            <div class="mt-2 pt-2 border-t flex justify-between text-[10px] text-slate-400">
-                                                <span>Lý do: {{ rev.reason }}</span>
-                                                <span>Bởi: {{ memberName(rev.actorId) }} lúc {{ rev.createdAt | date:'dd/MM/yyyy HH:mm' }}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                                                          <!-- Slot header row -->
+                                                          <div class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none"
+                                                               [class.bg-indigo-50]="activeSlotId === slot.slotId"
+                                                               [class.dark:bg-indigo-950/40]="activeSlotId === slot.slotId"
+                                                               [class.bg-slate-50]="activeSlotId !== slot.slotId"
+                                                               [class.dark:bg-slate-850]="activeSlotId !== slot.slotId"
+                                                               (click)="selectSlot(slot.slotId)">
+                                                              <i class="pi pi-lock text-[10px]"
+                                                                 [class.text-indigo-500]="activeSlotId === slot.slotId"
+                                                                 [class.text-slate-400]="activeSlotId !== slot.slotId"></i>
+                                                              <!-- Inline editable label -->
+                                                              <input type="text"
+                                                                     [value]="getSlotLabel(slot.slotId)"
+                                                                     (change)="updateSlotLabel(slot.slotId, $event)"
+                                                                     (click)="$event.stopPropagation()"
+                                                                     placeholder="Tên nhóm (tuỳ chọn)"
+                                                                     class="flex-1 text-xs font-semibold bg-transparent border-none outline-none text-slate-800 dark:text-slate-100 placeholder-slate-400 min-w-0" />
+                                                              <span class="text-[10px] px-1.5 py-0.5 rounded font-bold flex-shrink-0"
+                                                                    [class.bg-indigo-100]="activeSlotId === slot.slotId"
+                                                                    [class.text-indigo-700]="activeSlotId === slot.slotId"
+                                                                    [class.bg-slate-100]="activeSlotId !== slot.slotId"
+                                                                    [class.text-slate-500]="activeSlotId !== slot.slotId">
+                                                                  {{ getSlotMemberCount(slot.slotId) }}/{{ currTournament.teamSize || 3 }}
+                                                              </span>
+                                                              <button class="p-1 hover:bg-red-50 dark:hover:bg-red-950/30 rounded text-slate-400 hover:text-red-500 transition flex-shrink-0 border-none bg-transparent cursor-pointer"
+                                                                      (click)="$event.stopPropagation(); removeManualSlot(slot.slotId)" title="Xoá nhóm">
+                                                                  <i class="pi pi-times text-[10px]"></i>
+                                                              </button>
+                                                          </div>
+
+                                                          <!-- Player checklist (visible when slot is active) -->
+                                                          <div *ngIf="activeSlotId === slot.slotId" class="p-3 border-t border-indigo-100 dark:border-indigo-900/50 bg-white dark:bg-slate-900">
+                                                              <p class="text-[10px] text-slate-400 mb-2 m-0">Chọn VĐV để thêm vào nhóm này:</p>
+                                                              <div class="grid grid-cols-2 md:grid-cols-3 gap-1.5 max-h-[180px] overflow-auto">
+                                                                  <div *ngFor="let reg of getSortedRegistrations()"
+                                                                       class="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer border transition-all select-none text-xs"
+                                                                       [class.bg-indigo-50]="isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                       [class.border-indigo-300]="isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                       [class.dark:bg-indigo-950/40]="isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                       [class.dark:border-indigo-700]="isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                       [class.bg-white]="!isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                       [class.border-slate-200]="!isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                       [class.dark:bg-slate-850]="!isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                       [class.dark:border-slate-700]="!isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                       [class.opacity-50]="isPlayerInAnySlot(reg.memberId) && !isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                       (click)="togglePlayerInSlot(slot.slotId, reg.memberId)">
+                                                                      <i class="pi flex-shrink-0 text-[10px]"
+                                                                         [class.pi-check-circle]="isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                         [class.text-indigo-600]="isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                         [class.pi-circle]="!isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                         [class.text-slate-300]="!isPlayerInSlot(slot.slotId, reg.memberId)"></i>
+                                                                      <span class="truncate font-medium"
+                                                                            [class.text-indigo-700]="isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                            [class.dark:text-indigo-300]="isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                            [class.text-slate-700]="!isPlayerInSlot(slot.slotId, reg.memberId)"
+                                                                            [class.dark:text-slate-300]="!isPlayerInSlot(slot.slotId, reg.memberId)">
+                                                                          {{ memberName(reg.memberId) }}
+                                                                      </span>
+                                                                      <span class="text-[9px] text-slate-400 flex-shrink-0">{{ reg.rankSnapshot || getMemberRank(reg.memberId) }}</span>
+                                                                  </div>
+                                                              </div>
+                                                          </div>
+                                                      </div>
+                                                  </div>
+
+                                                  <!-- Empty state -->
+                                                  <div *ngIf="!currTournament.manualTeamSlots?.length" class="py-4 text-center text-[11px] text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-lg">
+                                                      Chưa có nhóm khoá nào. Bấm nút bên dưới để thêm.
+                                                  </div>
+
+                                                  <!-- Slot actions -->
+                                                  <div class="flex items-center gap-2 flex-wrap">
+                                                      <button class="px-3 py-1.5 border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 rounded text-xs font-bold hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition cursor-pointer flex items-center gap-1 bg-transparent"
+                                                              (click)="addManualSlot()">
+                                                          <i class="pi pi-plus text-[10px]"></i> Thêm nhóm khoá mới
+                                                      </button>
+                                                      <button *ngIf="(currTournament.manualTeamSlots?.length || 0) > 0"
+                                                              class="px-3 py-1.5 border border-red-200 text-red-500 rounded text-xs font-bold hover:bg-red-50 transition cursor-pointer flex items-center gap-1 bg-transparent"
+                                                              (click)="clearAllManualSlots()">
+                                                          <i class="pi pi-trash text-[10px]"></i> Xoá tất cả nhóm
+                                                      </button>
+                                                  </div>
+                                              </div>
+                                          </div>
+
+                                          <!-- Generate teams button -->
+                                          <div class="py-6 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 text-xs space-y-3">
+                                              <i class="pi pi-users block text-xl text-slate-350"></i>
+                                              <p class="m-0 max-w-xs mx-auto">
+                                                  <span *ngIf="getLockedMemberCount() === 0">Chưa phân chia đội hình. Chọn đội trưởng ở trên (nếu có) hoặc thiết lập nhóm khoá thủ công, rồi bấm nút dưới.</span>
+                                                  <span *ngIf="getLockedMemberCount() > 0" class="text-indigo-600 dark:text-indigo-400 font-semibold">
+                                                      <i class="pi pi-lock text-xs mr-1"></i>
+                                                      {{ getLockedMemberCount() }} VĐV đã khoá nhóm – {{ (currTournament.participants?.length || 0) - getLockedMemberCount() }} VĐV còn lại sẽ được chia ngẫu nhiên theo hạng.
+                                                  </span>
+                                              </p>
+                                              <div class="flex justify-center">
+                                                  <button class="px-4 py-2 bg-primary text-white rounded text-xs font-bold hover:bg-primary-600 transition flex items-center gap-1 shadow-sm" [disabled]="(currTournament.participants?.length || 0) < 4" (click)="generateTeams()">
+                                                      <i class="pi pi-users"></i>
+                                                      <span *ngIf="getLockedMemberCount() === 0">Chia Đội Ngẫu Nhiên &amp; Cân Bằng Theo Hạng</span>
+                                                      <span *ngIf="getLockedMemberCount() > 0">Chia Đội (Kết hợp Nhóm khoá + Tự động)</span>
+                                                  </button>
+                                              </div>
+                                          </div>
+                                      </div>
+                                  </div>
+
+                                  <!-- Section 2 Single: Group draw for individual-player tournaments -->
+                                  <div *ngIf="currTournament.type === 'single'" class="space-y-4">
+
+                                      <!-- Sub-state: No groups yet -->
+                                      <div *ngIf="!currTournament.groups || currTournament.groups.length === 0">
+                                          <div class="flex items-center justify-between mb-3 border-b pb-2">
+                                              <h4 class="text-base font-bold flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
+                                                  <i class="pi pi-sitemap text-primary"></i> 2. Bốc Thăm Chia Bảng (Giải Đơn)
+                                              </h4>
+                                              <button *ngIf="currTournament.status === 'draft'" class="px-3.5 py-2 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 transition shadow-sm flex items-center gap-1" [disabled]="(currTournament.participants?.length || 0) < 4" (click)="drawTournament(currTournament.id)">
+                                                  <i class="pi pi-sitemap"></i> Bốc Thăm Chia Bảng
+                                              </button>
+                                          </div>
+                                          <div class="flex flex-col items-center justify-center py-8 text-slate-400 gap-2 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
+                                              <i class="pi pi-sitemap text-2xl text-slate-300"></i>
+                                              <p class="text-xs m-0">Chưa chia bảng. Bấm <strong>"Bốc Thăm Chia Bảng"</strong> để phân bảng thi đấu cho các VĐV.</p>
+                                          </div>
+                                      </div>
+
+                                      <!-- Sub-state: Groups drawn -->
+                                      <div *ngIf="currTournament.groups && currTournament.groups.length > 0" class="space-y-4">
+                                          <div class="flex items-center justify-between mb-3 border-b pb-2">
+                                              <h4 class="text-base font-bold flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
+                                                  <i class="pi pi-sitemap text-primary"></i> 2. Kết quả phân bảng cá nhân
+                                              </h4>
+                                              <div class="flex items-center gap-2 flex-wrap">
+                                                  <button *ngIf="currTournament.status === 'draft'" class="px-3 py-1.5 bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded text-xs font-bold hover:bg-amber-200 transition flex items-center gap-1" (click)="drawTournament(currTournament.id)">
+                                                      <i class="pi pi-sync"></i> Chia lại bảng
+                                                  </button>
+                                                  <div class="text-xxs px-2.5 py-1 bg-green-50 text-green-700 border border-green-200 rounded-full font-extrabold flex items-center gap-1">
+                                                      <i class="pi pi-check"></i> ĐÃ CHIA BẢNG THÀNH CÔNG
+                                                  </div>
+                                              </div>
+                                          </div>
+                                          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                              <div *ngFor="let g of currTournament.groups" class="p-4 border border-surface-200 rounded-xl bg-surface-50 dark:bg-surface-800 shadow-inner space-y-3">
+                                                  <div class="font-black text-sm text-primary pb-1.5 border-b border-surface-200 flex justify-between items-center">
+                                                      <span>BẢNG {{ g.groupName }}</span>
+                                                      <span class="text-xxs px-2.5 py-0.5 bg-primary/10 text-primary rounded-full font-bold">Vòng loại</span>
+                                                  </div>
+                                                  <div class="space-y-2">
+                                                      <div *ngFor="let comp of g.competitors" class="p-2.5 bg-white dark:bg-slate-900 border border-surface-200 rounded-lg flex items-center gap-2 shadow-sm">
+                                                          <i class="pi pi-user text-slate-400 text-xs"></i>
+                                                          <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">{{ comp.name }}</span>
+                                                          <ng-container *ngIf="getRegSeed(comp.id) as seedVal">
+                                                              <span class="ml-auto text-[10px] px-1.5 py-0.2 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 rounded font-bold">Seed {{ seedVal }}</span>
+                                                          </ng-container>
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      </div>
+                                  </div>
+
+                                  <!-- Section 3: History & Draw Revisions (bottom) -->
+                                  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6" *ngIf="currTournament.seedOverrideHistory?.length || currTournament.drawRevisions?.length">
+                                      <!-- Seed Override History panel -->
+                                      <div class="card shadow-sm border border-surface-200 p-4" *ngIf="currTournament.seedOverrideHistory?.length">
+                                          <h5 class="text-sm font-bold mb-3 flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
+                                              <i class="pi pi-history text-slate-500"></i> Lịch sử điều chỉnh Hạt Giống
+                                          </h5>
+                                          <div class="space-y-3 max-h-[300px] overflow-auto pr-1">
+                                              <div *ngFor="let h of currTournament.seedOverrideHistory" class="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg text-xs space-y-1 relative border border-slate-100 dark:border-slate-800">
+                                                  <div class="flex items-center justify-between text-[11px] text-slate-450 mb-1">
+                                                      <span class="font-bold text-slate-700 dark:text-slate-200">VĐV: {{ memberName(h.memberId) }}</span>
+                                                      <span>{{ h.overriddenAt | date:'dd/MM/yyyy HH:mm' }}</span>
+                                                  </div>
+                                                  <div class="font-medium text-slate-800 dark:text-slate-100">
+                                                      Hạt giống: <span class="line-through text-red-500 font-bold mr-1">{{ h.oldSeed }}</span> &rarr; <span class="text-green-600 font-bold ml-1">{{ h.newSeed }}</span>
+                                                  </div>
+                                                  <div class="text-[11px] text-slate-500 dark:text-slate-400 italic">
+                                                      Lý do: {{ h.reason }}
+                                                  </div>
+                                                  <div class="text-[10px] text-slate-450 text-right mt-1">
+                                                      Thực hiện bởi: {{ memberName(h.actorId) }}
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      </div>
+
+                                      <!-- Draw Revisions timeline and comparisons -->
+                                      <div class="card shadow-sm border border-surface-200 p-4" *ngIf="currTournament.drawRevisions?.length">
+                                          <h5 class="text-sm font-bold mb-3 flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
+                                              <i class="pi pi-clone text-slate-500"></i> Các phiên bản Bốc Thăm (Revisions: {{ currTournament.drawRevisions?.length || 0 }})
+                                          </h5>
+                                          <div class="space-y-4 max-h-[300px] overflow-auto pr-1">
+                                              <div *ngFor="let rev of currTournament.drawRevisions" class="p-3 border rounded-lg bg-surface-50 dark:bg-slate-850 text-xs">
+                                                  <div class="flex items-center justify-between border-b pb-2 mb-2">
+                                                      <span class="font-extrabold text-slate-800 dark:text-slate-100 text-sm">Bản vẽ #{{ rev.revisionNo }}</span>
+                                                      <span class="px-2 py-0.5 rounded text-[10px] font-bold" [ngClass]="{
+                                                          'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400': rev.status === 'committed',
+                                                          'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400': rev.status === 'dirty'
+                                                      }">
+                                                          {{ rev.status === 'committed' ? 'Đã Áp Dụng (Committed)' : 'Nháp / Chờ điều chỉnh (Dirty)' }}
+                                                      </span>
+                                                  </div>
+                                                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                      <div>
+                                                          <div class="font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                                                              <i class="pi pi-users text-slate-400"></i> Cơ cấu đội hình:
+                                                          </div>
+                                                          <ul class="list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-400 m-0">
+                                                              <li *ngFor="let team of rev.teams">
+                                                                  <strong>{{ team.teamName }}:</strong>
+                                                                  <span>{{ getMemberNamesJoined(team.memberIds) }}</span>
+                                                                  <span class="ml-1 text-[10px] bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 px-1 rounded font-bold">Tổng Seed: {{ team.seedTotal }}</span>
+                                                              </li>
+                                                          </ul>
+                                                      </div>
+                                                      <div>
+                                                          <div class="font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                                                              <i class="pi pi-sitemap text-slate-400"></i> Cơ cấu bảng đấu:
+                                                          </div>
+                                                          <ul class="list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-400 m-0">
+                                                              <li *ngFor="let g of rev.groups">
+                                                                  <strong>Bảng {{ g.groupName }}:</strong>
+                                                                  <span>{{ getCompetitorNamesJoined(g.competitorIds) }}</span>
+                                                              </li>
+                                                          </ul>
+                                                      </div>
+                                                  </div>
+                                                  <div class="mt-2 pt-2 border-t flex justify-between text-[10px] text-slate-400">
+                                                      <span>Lý do: {{ rev.reason }}</span>
+                                                      <span>Bởi: {{ memberName(rev.actorId) }} lúc {{ rev.createdAt | date:'dd/MM/yyyy HH:mm' }}</span>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+
 
                             <!-- Detail Tab Content: Group Stage -->
                             <div *ngIf="detailTab === 'group'" class="space-y-6">
@@ -1327,7 +1492,7 @@ import { Router, ActivatedRoute } from '@angular/router';
                                         <i class="pi pi-sitemap text-primary"></i> Sơ Đồ Nhánh Đấu Trực Tiếp (Knockout)
                                     </h4>
                                     <div class="flex items-center gap-2" *ngIf="currTournament.status === 'ongoing'">
-                                        <button *ngIf="canGenerateFinal()" class="px-3 py-1.5 bg-indigo-650 hover:bg-indigo-750 text-white rounded text-xs font-bold transition flex items-center gap-1.5" (click)="generateFinal()">
+                                        <button *ngIf="canGenerateFinal()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-750 text-white rounded text-xs font-bold transition flex items-center gap-1.5" (click)="generateFinal()">
                                             <i class="pi pi-plus-circle"></i> Lập Trận Chung Kết
                                         </button>
                                     </div>
@@ -1686,7 +1851,7 @@ import { Router, ActivatedRoute } from '@angular/router';
                     <span class="font-bold text-slate-700 dark:text-slate-200">Bốc thăm nhóm thi đấu:</span>
                     <div class="flex gap-2">
                         <button type="button" class="px-3 py-1.5 text-xs font-bold rounded border transition-all"
-                                [class.bg-indigo-650]="lineupForm.isHomeABC === true"
+                                [class.bg-indigo-600]="lineupForm.isHomeABC === true"
                                 [class.text-white]="lineupForm.isHomeABC === true"
                                 [class.bg-white]="lineupForm.isHomeABC === false"
                                 [class.text-slate-700]="lineupForm.isHomeABC === false"
@@ -1694,7 +1859,7 @@ import { Router, ActivatedRoute } from '@angular/router';
                             Đội nhà ABC | Đội khách XYZ
                         </button>
                         <button type="button" class="px-3 py-1.5 text-xs font-bold rounded border transition-all"
-                                [class.bg-indigo-650]="lineupForm.isHomeABC === false"
+                                [class.bg-indigo-600]="lineupForm.isHomeABC === false"
                                 [class.text-white]="lineupForm.isHomeABC === false"
                                 [class.bg-white]="lineupForm.isHomeABC === true"
                                 [class.text-slate-700]="lineupForm.isHomeABC === true"
@@ -3054,17 +3219,21 @@ export class AdminPortal implements OnInit {
     }
 
     addSelectedPlayersToTournament(): void {
-        if (this.currTournament && this.selectedAddPlayerIds.length > 0) {
-            for (const pid of this.selectedAddPlayerIds) {
-                this.dataService.registerPlayerForTournament(this.currTournament.id, pid);
-            }
-            this.selectedAddPlayerIds = [];
-            this.addPlayerSearchQuery = '';
-            this.reloadAll();
-            const updated = this.allTournaments.find((x: any) => x.id === this.currTournament!.id);
-            this.currTournament = updated ? { ...updated } : null;
-        }
+        if (!this.currTournament || this.selectedAddPlayerIds.length === 0) return;
+
+        const tournamentId = this.currTournament.id;
+        const ids = [...this.selectedAddPlayerIds];
+
+        // Use batch method to register all players atomically (single sync to backend)
+        this.dataService.batchRegisterPlayersForTournament(tournamentId, ids);
+
+        this.selectedAddPlayerIds = [];
+        this.addPlayerSearchQuery = '';
+        this.reloadAll();
+        const updated = this.allTournaments.find((x: any) => x.id === tournamentId);
+        if (updated) this.currTournament = { ...updated };
     }
+
 
     removePlayerFromTournament(pid: string): void {
         if (!this.currTournament) return;
@@ -3215,6 +3384,126 @@ export class AdminPortal implements OnInit {
             this.currTournament = updated ? { ...updated } : null;
         }
     }
+
+    /** Clear all teams and return to the slot-builder (Sub-state C) */
+    clearTeams(): void {
+        if (!this.currTournament) return;
+        this.openConfirmDialog(
+            'Bạn có chắc muốn xóa toàn bộ đội hình hiện tại? Các đội sẽ bị giải tán và bạn có thể phân đội lại thủ công hoặc chia ngẫu nhiên.',
+            () => {
+                const tournamentId = this.currTournament!.id;
+                this.dataService.clearTeamsForTournament(tournamentId);
+                this.reloadAll();
+                const updated = this.allTournaments.find((x: any) => x.id === tournamentId);
+                if (updated) this.currTournament = { ...updated };
+            },
+            'Hủy đội hình'
+        );
+    }
+
+    // ─── Manual Team Slot Builder ────────────────────────────────────────────
+    showManualSlotBuilder = false;
+    activeSlotId: string | null = null;
+
+    toggleManualSlotBuilder(): void {
+        this.showManualSlotBuilder = !this.showManualSlotBuilder;
+        if (!this.showManualSlotBuilder) this.activeSlotId = null;
+    }
+
+    addManualSlot(): void {
+        if (!this.currTournament) return;
+        const tournamentId = this.currTournament.id;
+        const slotId = this.dataService.addManualTeamSlot(tournamentId);
+        if (slotId) {
+            // reloadAll() re-fetches from service (getTournaments returns new mapped objects each time)
+            this.reloadAll();
+            const updated = this.allTournaments.find((x: any) => x.id === tournamentId);
+            if (updated) {
+                this.currTournament = {
+                    ...updated,
+                    manualTeamSlots: [...(updated.manualTeamSlots || [])]
+                };
+            }
+            this.activeSlotId = slotId;
+        }
+    }
+
+    removeManualSlot(slotId: string): void {
+        if (!this.currTournament) return;
+        const tournamentId = this.currTournament.id;
+        this.dataService.removeManualTeamSlot(tournamentId, slotId);
+        this.reloadAll();
+        const updated = this.allTournaments.find((x: any) => x.id === tournamentId);
+        if (updated) {
+            this.currTournament = {
+                ...updated,
+                manualTeamSlots: [...(updated.manualTeamSlots || [])]
+            };
+        }
+        if (this.activeSlotId === slotId) this.activeSlotId = null;
+    }
+
+    selectSlot(slotId: string): void {
+        this.activeSlotId = this.activeSlotId === slotId ? null : slotId;
+    }
+
+    togglePlayerInSlot(slotId: string, memberId: string): void {
+        if (!this.currTournament) return;
+        const tournamentId = this.currTournament.id;
+        this.dataService.togglePlayerInSlot(tournamentId, slotId, memberId);
+        this.reloadAll();
+        const updated = this.allTournaments.find((x: any) => x.id === tournamentId);
+        if (updated) {
+            const newSlots = (updated.manualTeamSlots || []).map((s: any) => ({ ...s, memberIds: [...s.memberIds] }));
+            this.currTournament = { ...updated, manualTeamSlots: newSlots };
+        }
+    }
+
+    isPlayerInSlot(slotId: string, memberId: string): boolean {
+        return this.currTournament?.manualTeamSlots
+            ?.find(s => s.slotId === slotId)
+            ?.memberIds.includes(memberId) ?? false;
+    }
+
+    getPlayerSlotId(memberId: string): string | null {
+        const slot = this.currTournament?.manualTeamSlots?.find(s => s.memberIds.includes(memberId));
+        return slot?.slotId ?? null;
+    }
+
+    isPlayerInAnySlot(memberId: string): boolean {
+        return !!this.getPlayerSlotId(memberId);
+    }
+
+    getSlotLabel(slotId: string): string {
+        const slot = this.currTournament?.manualTeamSlots?.find(s => s.slotId === slotId);
+        if (!slot) return '';
+        if (slot.label) return slot.label;
+        const firstMemberId = slot.memberIds[0];
+        return firstMemberId ? `Đội ${this.memberName(firstMemberId)}` : 'Nhóm mới';
+    }
+
+    getSlotMemberCount(slotId: string): number {
+        return this.currTournament?.manualTeamSlots?.find(s => s.slotId === slotId)?.memberIds.length ?? 0;
+    }
+
+    getLockedMemberCount(): number {
+        return this.currTournament?.manualTeamSlots?.reduce((sum, s) => sum + s.memberIds.length, 0) ?? 0;
+    }
+
+    updateSlotLabel(slotId: string, event: Event): void {
+        if (!this.currTournament) return;
+        const input = event.target as HTMLInputElement;
+        this.dataService.renameManualTeamSlot(this.currTournament.id, slotId, input.value);
+    }
+
+    clearAllManualSlots(): void {
+        if (!this.currTournament) return;
+        this.dataService.clearAllManualSlots(this.currTournament.id);
+        const updated = this.allTournaments.find((x: any) => x.id === this.currTournament!.id);
+        if (updated) this.currTournament = { ...updated };
+        this.activeSlotId = null;
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     openLineupDialog(match: any, isKnockout: boolean): void {
         if (!this.currTournament) return;
@@ -3448,6 +3737,74 @@ export class AdminPortal implements OnInit {
         this.showSubScoresDialog = false;
     }
 
+    getMemberGender(pid: string): string {
+        if (this.currTournament && this.currTournament.registrations) {
+            const reg = this.currTournament.registrations.find((r: any) => r.memberId === pid);
+            if (reg && reg.genderSnapshot) {
+                return reg.genderSnapshot;
+            }
+        }
+        const m = this.members.find(x => x.id === pid);
+        return m?.gender || 'N/A';
+    }
+
+    getSortedRegistrations(): any[] {
+        if (!this.currTournament || !this.currTournament.registrations) return [];
+        return [...this.currTournament.registrations].sort((a: any, b: any) => (a.seed || 999) - (b.seed || 999));
+    }
+
+    /** Handle CDK drag-drop to reorder seed positions */
+    onSeedDrop(event: CdkDragDrop<any[]>): void {
+        if (!this.currTournament) return;
+        if (event.previousIndex === event.currentIndex) return;
+
+        const sorted = this.getSortedRegistrations();
+        moveItemInArray(sorted, event.previousIndex, event.currentIndex);
+
+        // Optimistically update seeds in currTournament.registrations so the UI refreshes immediately
+        sorted.forEach((reg, index) => {
+            const local = this.currTournament!.registrations?.find((r: any) => r.memberId === reg.memberId);
+            if (local) local.seed = index + 1;
+        });
+
+        // Persist via one PUT call
+        const newOrder = sorted.map((r: any) => r.memberId);
+        this.dataService.batchReorderSeeds(this.currTournament.id, newOrder);
+
+        // Full reload after a short delay so the server state is reflected
+        setTimeout(() => this.reloadAll(), 400);
+    }
+
+    onSeedInlineChange(reg: any, event: any): void {
+        if (!this.currTournament) return;
+        const newSeed = parseInt(event.target.value, 10);
+        if (isNaN(newSeed) || newSeed <= 0) {
+            event.target.value = reg.seed;
+            return;
+        }
+
+        const duplicate = this.currTournament.registrations?.find((r: any) =>
+            r.memberId !== reg.memberId && r.seed === newSeed
+        );
+        if (duplicate) {
+            this.messageDialogTitle = 'Lỗi Ràng Buộc Hạt Giống';
+            this.messageDialogText = `Hạt giống ${newSeed} đã được phân cho đấu thủ khác trong giải đấu. Mỗi hạt giống phải là duy nhất!`;
+            this.showMessageDialog = true;
+            event.target.value = reg.seed;
+            return;
+        }
+
+        this.dataService.overrideTournamentSeed(
+            this.currTournament.id,
+            reg.memberId,
+            newSeed,
+            'Cập nhật hạt giống chuẩn bị bốc thăm (nháp)',
+            this.adminUserId
+        );
+        
+        setTimeout(() => this.reloadAll(), 250);
+    }
+
     getMemberDepartment(pid: string): string {
         const m = this.members.find(x => x.id === pid);
         return m?.department || 'Phong CNTT';
@@ -3473,6 +3830,13 @@ export class AdminPortal implements OnInit {
         }
         const m = this.members.find(x => x.id === pid);
         return m?.rankTier || 'A5';
+    }
+
+    /** Get seed number for a competitor (by memberId) from current tournament registrations */
+    getRegSeed(memberId: string): number | null {
+        if (!this.currTournament?.registrations) return null;
+        const reg = this.currTournament.registrations.find((r: any) => r.memberId === memberId);
+        return reg?.seed ?? null;
     }
 
     getSortedParticipants(): string[] {
@@ -3564,7 +3928,17 @@ export class AdminPortal implements OnInit {
 
     // Helpers
     memberName(memberId: string): string {
-        return this.members.find((member) => member.id === memberId)?.fullName ?? memberId;
+        return (this.members || []).find((member) => member.id === memberId)?.fullName ?? memberId;
+    }
+
+    /** Safely join multiple member IDs into a name string (preserves 'this' context) */
+    getMemberNamesJoined(ids: string[], separator = ', '): string {
+        return (ids || []).map(id => this.memberName(id)).join(separator);
+    }
+
+    /** Safely join multiple competitor IDs into a name string (preserves 'this' context) */
+    getCompetitorNamesJoined(ids: string[], separator = ' \u2022 '): string {
+        return (ids || []).map(id => this.memberName(id)).join(separator);
     }
 
     getTournamentTypeLabel(type: string): string {

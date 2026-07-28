@@ -145,6 +145,7 @@ export interface Tournament {
     drawDirty?: boolean;
     location?: string;
     prizes?: TournamentPrize[];
+    manualTeamSlots?: Array<{ slotId: string; label?: string; memberIds: string[] }>;
     format?: 'group' | 'round_robin';
 }
 

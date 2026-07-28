@@ -173,11 +173,78 @@ public class TournamentController {
         tournament.setPrizes(updatedData.getPrizes());
         tournament.setFormat(updatedData.getFormat());
 
-        // Do not mutate competition state here; dedicated endpoints handle groups/scores/teams/captains.
+        // Synchronize participants and registrations if provided in the request
+        if (updatedData.getParticipants() != null) {
+            List<TournamentRegistration> existingRegs = tournamentRegistrationRepository.findByTournamentId(id);
+            List<String> updatedPids = updatedData.getParticipants();
+            
+            // Delete registrations that are no longer in the participants list
+            for (TournamentRegistration reg : existingRegs) {
+                if (!updatedPids.contains(reg.getMemberId())) {
+                    tournamentRegistrationRepository.delete(reg);
+                }
+            }
+            
+            // Add registrations for new participants
+            int seed = 1;
+            for (TournamentRegistration reg : existingRegs) {
+                if (reg.getSeed() != null && reg.getSeed() >= seed) {
+                    seed = reg.getSeed() + 1;
+                }
+            }
+            
+            for (String pid : updatedPids) {
+                boolean exists = existingRegs.stream().anyMatch(r -> r.getMemberId().equals(pid));
+                if (!exists) {
+                    Member member = memberRepository.findById(pid).orElse(null);
+                    if (member != null) {
+                        TournamentRegistration reg = new TournamentRegistration();
+                        reg.setTournamentId(id);
+                        reg.setMemberId(pid);
+                        reg.setSeed(seed++);
+                        reg.setSeedSource("auto");
+                        reg.setRankSnapshot(member.getRankTier());
+                        reg.setEloSnapshot(member.getElo());
+                        reg.setGenderSnapshot(member.getGender());
+                        reg.setDepartmentSnapshot(member.getDepartment());
+                        reg.setIsCaptain(false);
+                        reg.setStatus("active");
+                        reg.setRegisteredAt(LocalDateTime.now());
+                        tournamentRegistrationRepository.save(reg);
+                    }
+                }
+            }
+            
+            tournament.setParticipants(new ArrayList<>(updatedPids));
+            // Trigger registration version update
+            tournament.setRegistrationVersion(tournament.getRegistrationVersion() + 1);
+        }
+
+        // Copy transient configurations if provided
+        if (updatedData.getTeams() != null) {
+            tournament.setTeams(updatedData.getTeams());
+        }
+        if (updatedData.getCaptains() != null) {
+            tournament.setCaptains(updatedData.getCaptains());
+        }
+        if (updatedData.getGroups() != null) {
+            tournament.setGroups(updatedData.getGroups());
+        }
+        if (updatedData.getScores() != null) {
+            tournament.setScores(updatedData.getScores());
+        }
+        if (updatedData.getKnockoutMatches() != null) {
+            tournament.setKnockoutMatches(updatedData.getKnockoutMatches());
+        }
+        if (updatedData.getDrawRevisionCurrent() != null) {
+            tournament.setDrawRevisionCurrent(updatedData.getDrawRevisionCurrent());
+        }
+
         touchMetadataVersion(tournament);
 
         Tournament saved = tournamentRepository.save(tournament);
         persistTournamentState(saved);
+        hydrateTournamentState(saved); // Hydrate transient fields back to response
         syncNormalizedReadModels(saved, "SYSTEM");
         return ResponseEntity.ok(saved);
     }

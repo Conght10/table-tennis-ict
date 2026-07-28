@@ -75,6 +75,17 @@ export class TournamentEngineService {
             return null;
         }
 
+        // Shuffle within each pot (Fisher-Yates) so that re-runs produce different team compositions
+        // while still preserving the tier balance (one player per tier per team)
+        const shuffledPots = pots.map(pot => {
+            const arr = [...pot];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        });
+
         let bestTeams: SeededCompetitor[][] | null = null;
         let bestScore = Number.POSITIVE_INFINITY;
 
@@ -83,9 +94,9 @@ export class TournamentEngineService {
                 const candidateTeams: SeededCompetitor[][] = [];
                 for (let i = 0; i < teamCount; i += 1) {
                     candidateTeams.push([
-                        pots[0][i],
-                        pots[1][(i + middleShift) % teamCount],
-                        pots[2][(i + weakShift) % teamCount]
+                        shuffledPots[0][i],
+                        shuffledPots[1][(i + middleShift) % teamCount],
+                        shuffledPots[2][(i + weakShift) % teamCount]
                     ]);
                 }
 
@@ -192,7 +203,98 @@ export class TournamentEngineService {
         return teams;
     }
 
+    /**
+     * Hybrid team generation: locked slots become team seeds, remaining free players are
+     * distributed via snake-draft balanced by ELO strength.
+     *
+     * @param allPlayers     Full participant list
+     * @param teamSize       Target players per team
+     * @param lockedSlots    Pre-assigned player groups (can be partial – under teamSize)
+     * @param designatedCaptains  Captains from admin selection (used for free-pool captain logic)
+     * @param getMemberElo   Strength scorer (higher = stronger)
+     */
+    generateTeamsWithLockedSlots(
+        allPlayers: Competitor[],
+        teamSize: number,
+        lockedSlots: Array<{ slotId: string; label?: string; memberIds: string[] }>,
+        designatedCaptains: string[],
+        getMemberElo: (id: string) => number
+    ): Team[] {
+        const effectiveTeamSize = Math.max(teamSize, 1);
+
+        // 1. Build set of all locked member IDs
+        const lockedMemberIdSet = new Set<string>(lockedSlots.flatMap(s => s.memberIds));
+
+        // 2. Initialise teams from locked slots (in order, preserving member sequence)
+        const teams: Team[] = lockedSlots.map((slot, idx) => ({
+            id: `team-${idx + 1}`,
+            name: slot.label?.trim()
+                ? slot.label.trim()
+                : (allPlayers.find(p => p.id === slot.memberIds[0])?.name
+                    ? `Đội ${allPlayers.find(p => p.id === slot.memberIds[0])!.name}`
+                    : `Đội ${idx + 1}`),
+            players: slot.memberIds
+                .map(mid => allPlayers.find(p => p.id === mid))
+                .filter((p): p is Competitor => !!p)
+        }));
+
+        // 3. Free pool = participants NOT in any locked slot
+        const freePool = allPlayers.filter(p => !lockedMemberIdSet.has(p.id));
+
+        // 4. Determine total team count needed
+        const numTeams = Math.max(teams.length, Math.floor(allPlayers.length / effectiveTeamSize));
+
+        // 5. Add empty team slots if we need more teams than locked slots
+        for (let i = teams.length; i < numTeams; i++) {
+            // Prefer captains to lead new teams
+            const cap = freePool.find(p => designatedCaptains.includes(p.id));
+            const leader = cap ?? freePool[0];
+            if (leader) {
+                freePool.splice(freePool.indexOf(leader), 1);
+                teams.push({
+                    id: `team-${i + 1}`,
+                    name: `Đội ${leader.name}`,
+                    players: [leader]
+                });
+            } else {
+                teams.push({ id: `team-${i + 1}`, name: `Đội ${i + 1}`, players: [] });
+            }
+        }
+
+        // 6. Snake-draft remaining free pool (shuffle within same tier, sort by strength desc)
+        const shuffled = [...freePool].sort(() => Math.random() - 0.5);
+        const sorted = shuffled.sort((a, b) => getMemberElo(b.id) - getMemberElo(a.id));
+
+        let direction = 1;
+        let teamIdx = 0;
+
+        for (const player of sorted) {
+            let assigned = false;
+            let searched = 0;
+            while (!assigned && searched < numTeams) {
+                const currentTeam = teams[teamIdx];
+                if (currentTeam.players.length < effectiveTeamSize) {
+                    currentTeam.players.push(player);
+                    assigned = true;
+                }
+                teamIdx += direction;
+                if (teamIdx >= numTeams) { teamIdx = numTeams - 1; direction = -1; }
+                else if (teamIdx < 0) { teamIdx = 0; direction = 1; }
+                searched++;
+            }
+            // Fallback: first non-full team
+            if (!assigned) {
+                const fallback = teams.find(t => t.players.length < effectiveTeamSize);
+                if (fallback) fallback.players.push(player);
+                else teams[0].players.push(player);
+            }
+        }
+
+        return teams;
+    }
+
     generateRandomGroups<TCompetitor extends Competitor>(competitors: readonly TCompetitor[], groupSize: number): GroupAssignment<TCompetitor>[] {
+
         const effectiveGroupSize = Math.max(groupSize, 2);
         const shuffled = this.shuffle(competitors);
         const groups: GroupAssignment<TCompetitor>[] = [];

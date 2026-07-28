@@ -198,6 +198,8 @@ export class EvnictDataService {
     private bookings: CourtBooking[] = [];
     private readonly tournamentSyncInFlight = new Set<string>();
     private readonly tournamentSyncQueued = new Set<string>();
+    /** Stores a desired seed order per tournament that must survive server round-trips until confirmed */
+    private readonly pendingSeedOrder = new Map<string, string[]>();
 
     constructor(
         private readonly eloService: EloService,
@@ -410,6 +412,9 @@ export class EvnictDataService {
         this.tournamentSyncInFlight.delete(tournamentId);
         if (this.tournamentSyncQueued.delete(tournamentId)) {
             this.syncTournamentToBackend(tournamentId);
+        } else {
+            // No more syncs queued — the server now has the latest state, clear pending seed order
+            this.pendingSeedOrder.delete(tournamentId);
         }
     }
 
@@ -417,7 +422,24 @@ export class EvnictDataService {
         const index = this.tournaments.findIndex((tournament) => tournament.id === updated.id);
         if (index !== -1) {
             this.tournaments[index] = this.hydrateTournamentDerivedData(updated);
+            // Re-apply any pending seed reorder that was queued after the in-flight PUT was dispatched
+            const pending = this.pendingSeedOrder.get(updated.id);
+            if (pending) {
+                this.applySeedOrder(this.tournaments[index], pending);
+            }
         }
+    }
+
+    /** Re-assign seeds 1..n in order for the given memberIdOrder array */
+    private applySeedOrder(t: Tournament, memberIdOrder: string[]): void {
+        if (!t.registrations) return;
+        memberIdOrder.forEach((memberId, index) => {
+            const reg = t.registrations!.find((r) => r.memberId === memberId);
+            if (reg) {
+                reg.seed = index + 1;
+                reg.seedSource = 'manual';
+            }
+        });
     }
 
     private getMetadataVersion(tournament: Tournament | undefined | null): number {
@@ -1268,7 +1290,24 @@ export class EvnictDataService {
         });
 
         if (t.type === 'team') {
-            t.teams = this.tryGenerateSeededTeams(t) || this.tournamentEngine.generateTeamsWithCaptains(sourcePlayers, t.teamSize ?? 3, t.captains || [], (pid) => this.getMemberRankStrength(pid, t.id));
+            const hasLockedSlots = (t.manualTeamSlots?.length ?? 0) > 0;
+            if (hasLockedSlots) {
+                // Hybrid: locked slots are team seeds, free pool is balanced via snake-draft
+                t.teams = this.tournamentEngine.generateTeamsWithLockedSlots(
+                    sourcePlayers,
+                    t.teamSize ?? 3,
+                    t.manualTeamSlots!,
+                    t.captains || [],
+                    (pid) => this.getMemberRankStrength(pid, t.id)
+                );
+                // Clear the manual slots after consuming them (they're baked into teams now)
+                t.manualTeamSlots = [];
+            } else {
+                t.teams = this.tryGenerateSeededTeams(t) || this.tournamentEngine.generateTeamsWithCaptains(
+                    sourcePlayers, t.teamSize ?? 3, t.captains || [],
+                    (pid) => this.getMemberRankStrength(pid, t.id)
+                );
+            }
             this.syncTournamentToBackend(id);
             return true;
         } else if (t.type === 'double') {
@@ -1277,6 +1316,73 @@ export class EvnictDataService {
             return true;
         }
         return false;
+    }
+
+    /** Clear all teams and manual slots, returning tournament to the slot-builder state */
+    clearTeamsForTournament(tournamentId: string): boolean {
+        const t = this.tournaments.find((x) => x.id === tournamentId);
+        if (!t || t.status !== 'draft') return false;
+        t.teams = [];
+        t.manualTeamSlots = [];
+        this.syncTournamentToBackend(tournamentId);
+        return true;
+    }
+
+    /** Add a new empty manual team slot and return its generated ID */
+    addManualTeamSlot(tournamentId: string): string | null {
+        const t = this.tournaments.find((x) => x.id === tournamentId);
+        if (!t || t.status !== 'draft' || (t.type !== 'team' && t.type !== 'double')) return null;
+        if (!t.manualTeamSlots) t.manualTeamSlots = [];
+        const slotId = `slot-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        t.manualTeamSlots.push({ slotId, memberIds: [] });
+        return slotId;
+    }
+
+    /** Remove a manual team slot (players return to free pool) */
+    removeManualTeamSlot(tournamentId: string, slotId: string): boolean {
+        const t = this.tournaments.find((x) => x.id === tournamentId);
+        if (!t?.manualTeamSlots) return false;
+        const before = t.manualTeamSlots.length;
+        t.manualTeamSlots = t.manualTeamSlots.filter(s => s.slotId !== slotId);
+        return t.manualTeamSlots.length < before;
+    }
+
+    /** Toggle a member's presence in a specific slot (remove from other slots first) */
+    togglePlayerInSlot(tournamentId: string, slotId: string, memberId: string): boolean {
+        const t = this.tournaments.find((x) => x.id === tournamentId);
+        if (!t?.manualTeamSlots) return false;
+        const targetSlot = t.manualTeamSlots.find(s => s.slotId === slotId);
+        if (!targetSlot) return false;
+
+        const alreadyInTarget = targetSlot.memberIds.includes(memberId);
+        if (alreadyInTarget) {
+            // Remove from this slot
+            targetSlot.memberIds = targetSlot.memberIds.filter(id => id !== memberId);
+        } else {
+            // Remove from any other slot first
+            t.manualTeamSlots.forEach(s => {
+                if (s.slotId !== slotId) {
+                    s.memberIds = s.memberIds.filter(id => id !== memberId);
+                }
+            });
+            targetSlot.memberIds.push(memberId);
+        }
+        return true;
+    }
+
+    /** Clear all manual team slots for a tournament */
+    clearAllManualSlots(tournamentId: string): void {
+        const t = this.tournaments.find((x) => x.id === tournamentId);
+        if (t) t.manualTeamSlots = [];
+    }
+
+    /** Update the label of a manual team slot */
+    renameManualTeamSlot(tournamentId: string, slotId: string, label: string): boolean {
+        const t = this.tournaments.find((x) => x.id === tournamentId);
+        const slot = t?.manualTeamSlots?.find(s => s.slotId === slotId);
+        if (!slot) return false;
+        slot.label = label;
+        return true;
     }
 
     toggleCaptainForTournament(tournamentId: string, memberId: string): boolean {
@@ -2078,6 +2184,37 @@ export class EvnictDataService {
         return false;
     }
 
+    /** Register multiple players at once and sync only once at the end (avoids race condition) */
+    batchRegisterPlayersForTournament(tournamentId: string, memberIds: string[]): number {
+        const t = this.tournaments.find((x) => x.id === tournamentId);
+        if (!t || t.status !== 'draft') return 0;
+
+        this.ensureTournamentRegistrations(t);
+        if (!t.participants) t.participants = [];
+        if (!t.registrations) t.registrations = [];
+
+        let added = 0;
+        for (const memberId of memberIds) {
+            if (!t.participants.includes(memberId)) {
+                t.participants.push(memberId);
+                if (!t.registrations.some((r) => r.memberId === memberId)) {
+                    const nextSeed = this.nextSeedValue(t.registrations);
+                    t.registrations.push(this.buildTournamentRegistration(memberId, nextSeed));
+                }
+                this.pushNotification(memberId, 'Đăng ký giải đấu thành công', `Bạn đã đăng ký tham gia giải đấu ${t.name} thành công. 🎉`);
+                this.logAction(memberId, 'Đăng ký giải đấu', `Đăng ký tham gia giải ${t.name} (ID: ${t.id})`, 'Tự đăng ký');
+                added++;
+            }
+        }
+
+        // Sync ONCE after all players are added locally — avoids race condition
+        if (added > 0) {
+            this.syncTournamentToBackend(tournamentId);
+        }
+        return added;
+    }
+
+
     getTournamentRegistrations(tournamentId: string): TournamentRegistration[] {
         const tournament = this.tournaments.find((item) => item.id === tournamentId);
         if (!tournament) {
@@ -2147,6 +2284,20 @@ export class EvnictDataService {
             }
         });
 
+        return true;
+    }
+
+    /** Batch-reorder seeds for all participants in one shot (used for drag-and-drop seed reorder).
+     *  memberIdOrder is an array of member IDs in the desired seed order (index 0 -> seed 1, etc.)
+     */
+    batchReorderSeeds(tournamentId: string, memberIdOrder: string[]): boolean {
+        const t = this.tournaments.find((x) => x.id === tournamentId);
+        if (!t || t.status !== 'draft' || !t.registrations) return false;
+        // Apply locally
+        this.applySeedOrder(t, memberIdOrder);
+        // Store as pending so replaceLocalTournament re-applies it if an old server response arrives first
+        this.pendingSeedOrder.set(tournamentId, [...memberIdOrder]);
+        this.syncTournamentToBackend(tournamentId);
         return true;
     }
 
