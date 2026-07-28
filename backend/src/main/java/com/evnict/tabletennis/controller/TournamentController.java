@@ -220,6 +220,48 @@ public class TournamentController {
             tournament.setRegistrationVersion(tournament.getRegistrationVersion() + 1);
         }
 
+        // Synchronize registrations (seeds, seedSource, isCaptain, etc.) if provided in the request
+        if (updatedData.getRegistrations() != null && !updatedData.getRegistrations().isEmpty()) {
+            List<TournamentRegistration> existingRegs = tournamentRegistrationRepository.findByTournamentId(id);
+            Map<String, TournamentRegistration> existingRegMap = existingRegs.stream()
+                    .collect(Collectors.toMap(TournamentRegistration::getMemberId, r -> r, (r1, r2) -> r1));
+
+            for (Object regObj : updatedData.getRegistrations()) {
+                try {
+                    TournamentRegistration incoming = OBJECT_MAPPER.convertValue(regObj, TournamentRegistration.class);
+                    if (incoming != null && incoming.getMemberId() != null) {
+                        TournamentRegistration existing = existingRegMap.get(incoming.getMemberId());
+                        if (existing != null) {
+                            if (incoming.getSeed() != null) {
+                                existing.setSeed(incoming.getSeed());
+                            }
+                            if (incoming.getSeedSource() != null) {
+                                existing.setSeedSource(incoming.getSeedSource());
+                            }
+                            if (incoming.getIsCaptain() != null) {
+                                existing.setIsCaptain(incoming.getIsCaptain());
+                            }
+                            if (incoming.getRankSnapshot() != null) {
+                                existing.setRankSnapshot(incoming.getRankSnapshot());
+                            }
+                            if (incoming.getEloSnapshot() != null) {
+                                existing.setEloSnapshot(incoming.getEloSnapshot());
+                            }
+                            if (incoming.getGenderSnapshot() != null) {
+                                existing.setGenderSnapshot(incoming.getGenderSnapshot());
+                            }
+                            if (incoming.getDepartmentSnapshot() != null) {
+                                existing.setDepartmentSnapshot(incoming.getDepartmentSnapshot());
+                            }
+                            tournamentRegistrationRepository.save(existing);
+                        }
+                    }
+                } catch (Exception e) {
+                    // Ignore conversion errors for transient objects
+                }
+            }
+        }
+
         // Copy transient configurations if provided
         if (updatedData.getTeams() != null) {
             tournament.setTeams(updatedData.getTeams());
