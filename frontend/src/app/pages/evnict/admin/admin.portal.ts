@@ -822,7 +822,7 @@ import { Router, ActivatedRoute } from '@angular/router';
                                                   </tr>
                                               </thead>
                                               <tbody cdkDropList [cdkDropListDisabled]="currTournament.drawRevisionCurrent !== 0 || currTournament.status !== 'draft'" (cdkDropListDropped)="onSeedDrop($event)" class="[&_.cdk-drag-placeholder]:opacity-30 [&_.cdk-drag-placeholder]:bg-indigo-50">
-                                                  <tr *ngFor="let reg of getSortedRegistrations()" cdkDrag [cdkDragDisabled]="currTournament.drawRevisionCurrent !== 0 || currTournament.status !== 'draft'" class="border-b hover:bg-surface-50 [&.cdk-drag-animating]:transition-transform">
+                                                  <tr *ngFor="let reg of sortedRegistrations" cdkDrag [cdkDragDisabled]="currTournament.drawRevisionCurrent !== 0 || currTournament.status !== 'draft'" class="border-b hover:bg-surface-50 [&.cdk-drag-animating]:transition-transform">
                                                       <!-- Drag handle (only in pre-draw draft mode) -->
                                                       <td *ngIf="currTournament.drawRevisionCurrent === 0 && currTournament.status === 'draft'" cdkDragHandle class="py-2.5 px-2 text-center cursor-grab active:cursor-grabbing text-slate-300 hover:text-indigo-500 transition-colors select-none">
                                                           <i class="pi pi-bars text-xs"></i>
@@ -1026,7 +1026,7 @@ import { Router, ActivatedRoute } from '@angular/router';
                                                           <div *ngIf="activeSlotId === slot.slotId" class="p-3 border-t border-indigo-100 dark:border-indigo-900/50 bg-white dark:bg-slate-900">
                                                               <p class="text-[10px] text-slate-400 mb-2 m-0">Chọn VĐV để thêm vào nhóm này:</p>
                                                               <div class="grid grid-cols-2 md:grid-cols-3 gap-1.5 max-h-[180px] overflow-auto">
-                                                                  <div *ngFor="let reg of getSortedRegistrations()"
+                                                                  <div *ngFor="let reg of sortedRegistrations"
                                                                        class="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer border transition-all select-none text-xs"
                                                                        [class.bg-indigo-50]="isPlayerInSlot(slot.slotId, reg.memberId)"
                                                                        [class.border-indigo-300]="isPlayerInSlot(slot.slotId, reg.memberId)"
@@ -2305,7 +2305,24 @@ export class AdminPortal implements OnInit {
     // Tournaments engine
     allTournaments: Tournament[] = [];
     selectedTournamentId = '';
-    currTournament: Tournament | null = null;
+    private _currTournament: Tournament | null = null;
+    get currTournament(): Tournament | null {
+        return this._currTournament;
+    }
+    set currTournament(val: Tournament | null) {
+        this._currTournament = val;
+        this.updateSortedRegistrations();
+    }
+
+    sortedRegistrations: any[] = [];
+
+    updateSortedRegistrations(): void {
+        if (!this._currTournament || !this._currTournament.registrations) {
+            this.sortedRegistrations = [];
+            return;
+        }
+        this.sortedRegistrations = [...this._currTournament.registrations].sort((a: any, b: any) => (a.seed || 999) - (b.seed || 999));
+    }
     tournamentViewMode: 'list' | 'detail' = 'list';
     showCreateTournamentDialog = false;
     detailTab: 'overview' | 'players' | 'registrations' | 'group' | 'knockout' = 'overview';
