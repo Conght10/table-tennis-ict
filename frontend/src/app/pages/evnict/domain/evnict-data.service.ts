@@ -1412,7 +1412,10 @@ export class EvnictDataService {
         let competitors: Competitor[] = [];
 
         if (t.type === 'team' || t.type === 'double') {
-            this.generateTeamsForTournament(id);
+            // Only generate automatically if there are no teams populated yet
+            if (!t.teams || t.teams.length === 0) {
+                this.generateTeamsForTournament(id);
+            }
             competitors = (t.teams || []).map((team) => ({
                 id: team.id,
                 name: t.type === 'double'
