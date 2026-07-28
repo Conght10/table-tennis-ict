@@ -27,10 +27,20 @@ import { EvnictDataService } from '../../pages/evnict/domain/evnict-data.service
 
         <!-- Unified Horizontal Navigation Menu -->
         <div class="flex items-center gap-6 ml-8">
-            <a *ngIf="!isLoggedIn()" routerLink="/" class="text-sm font-semibold hover:text-primary transition no-underline text-slate-700 dark:text-slate-350 flex items-center"
+            <a routerLink="/" class="text-sm font-semibold hover:text-primary transition no-underline text-slate-700 dark:text-slate-350 flex items-center"
                [class.text-primary]="router.url === '/'" [class.font-bold]="router.url === '/'">
                 <i class="pi pi-home mr-1"></i> Trang Chủ
             </a>
+
+            <!-- High-level Portal Links when logged in but NOT on the portal routes -->
+            <ng-container *ngIf="isLoggedIn() && !isCurrentRouteAdmin() && !isCurrentRouteUser()">
+                <a *ngIf="isAdmin()" routerLink="/admin" class="text-sm font-semibold hover:text-primary transition no-underline text-slate-700 dark:text-slate-300 flex items-center">
+                    <i class="pi pi-cog mr-1"></i> Cổng Quản Trị
+                </a>
+                <a *ngIf="isPlayer()" routerLink="/user" class="text-sm font-semibold hover:text-primary transition no-underline text-slate-700 dark:text-slate-300 flex items-center">
+                    <i class="pi pi-user mr-1"></i> Cổng Thành Viên
+                </a>
+            </ng-container>
 
             <!-- Admin Menus -->
             <ng-container *ngIf="isAdmin() && isCurrentRouteAdmin()">
@@ -72,6 +82,11 @@ import { EvnictDataService } from '../../pages/evnict/domain/evnict-data.service
         </div>
 
         <div class="layout-topbar-actions ml-auto">
+            <!-- Mobile Menu Toggle -->
+            <button type="button" class="layout-topbar-action lg:hidden" (click)="toggleMobileMenu()" aria-label="Toggle navigation menu">
+                <i class="pi pi-bars"></i>
+            </button>
+
             <div class="layout-config-menu">
                 <button type="button" class="layout-topbar-action" (click)="toggleDarkMode()">
                     <i [ngClass]="{ 'pi ': true, 'pi-moon': layoutService.isDarkTheme(), 'pi-sun': !layoutService.isDarkTheme() }"></i>
@@ -119,6 +134,121 @@ import { EvnictDataService } from '../../pages/evnict/domain/evnict-data.service
                         </button>
                     </ng-container>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Menu Drawer Backdrop -->
+        <div *ngIf="showMobileMenu" class="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm lg:hidden" (click)="closeMobileMenu()"></div>
+
+        <!-- Mobile Menu Drawer Panel -->
+        <div class="mobile-menu-drawer fixed top-0 bottom-0 right-0 z-50 w-72 bg-white dark:bg-slate-900 shadow-2xl p-6 flex flex-col gap-6 lg:hidden"
+             [class.translate-x-0]="showMobileMenu" [class.translate-x-full]="!showMobileMenu">
+            
+            <!-- Header of drawer -->
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+                <span class="font-extrabold text-slate-900 dark:text-white uppercase tracking-wider text-sm flex items-center gap-2">
+                    <i class="pi pi-bars text-primary"></i> Menu Điều Hướng
+                </span>
+                <button type="button" class="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer bg-transparent" (click)="closeMobileMenu()">
+                    <i class="pi pi-times text-slate-500"></i>
+                </button>
+            </div>
+
+            <!-- Drawer Navigation Body -->
+            <div class="flex-grow flex flex-col gap-4 overflow-y-auto pr-1">
+                
+                <!-- General Navigation -->
+                <div class="flex flex-col gap-1">
+                    <span class="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-1.5">Hệ thống</span>
+                    <a routerLink="/" (click)="closeMobileMenu()" class="flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-lg no-underline transition"
+                       [class.bg-slate-100]="router.url === '/'" [class.text-primary]="router.url === '/'">
+                        <i class="pi pi-home text-sm"></i> Trang Chủ
+                    </a>
+                </div>
+
+                <!-- Logged In Dashboard Links -->
+                <ng-container *ngIf="isLoggedIn()">
+                    <div class="flex flex-col gap-1 border-t border-slate-100 dark:border-slate-800 pt-3">
+                        <span class="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-1.5">Cổng chức năng</span>
+                        
+                        <a *ngIf="isAdmin()" routerLink="/admin" (click)="closeMobileMenu()" class="flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-lg no-underline transition"
+                           [class.bg-slate-100]="isCurrentRouteAdmin()" [class.text-primary]="isCurrentRouteAdmin()">
+                            <i class="pi pi-cog text-sm"></i> Cổng Quản Trị
+                        </a>
+                        <a *ngIf="isPlayer()" routerLink="/user" (click)="closeMobileMenu()" class="flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-lg no-underline transition"
+                           [class.bg-slate-100]="isCurrentRouteUser()" [class.text-primary]="isCurrentRouteUser()">
+                            <i class="pi pi-user text-sm"></i> Cổng Thành Viên
+                        </a>
+                    </div>
+
+                    <!-- Admin Portal Specific Tabs -->
+                    <div class="flex flex-col gap-1 border-t border-slate-100 dark:border-slate-800 pt-3" *ngIf="isAdmin() && isCurrentRouteAdmin()">
+                        <span class="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-1.5">Chức năng Quản Trị</span>
+                        <a routerLink="/admin" [queryParams]="{tab: 'members'}" (click)="closeMobileMenu()" class="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-lg no-underline transition"
+                           [class.text-primary]="isActiveTab('/admin', 'members')" [class.font-bold]="isActiveTab('/admin', 'members')">
+                            <i class="pi pi-users text-xs"></i> Thành Viên
+                        </a>
+                        <a routerLink="/admin" [queryParams]="{tab: 'matches'}" (click)="closeMobileMenu()" class="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-lg no-underline transition"
+                           [class.text-primary]="isActiveTab('/admin', 'matches')" [class.font-bold]="isActiveTab('/admin', 'matches')">
+                            <i class="pi pi-check-circle text-xs"></i> Kết Quả & Tranh Chấp
+                        </a>
+                        <a routerLink="/admin" [queryParams]="{tab: 'tournaments'}" (click)="closeMobileMenu()" class="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-lg no-underline transition"
+                           [class.text-primary]="isActiveTab('/admin', 'tournaments')" [class.font-bold]="isActiveTab('/admin', 'tournaments')">
+                            <i class="pi pi-trophy text-xs"></i> Giải Đấu Engine
+                        </a>
+                        <a routerLink="/admin" [queryParams]="{tab: 'audit'}" (click)="closeMobileMenu()" class="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-lg no-underline transition"
+                           [class.text-primary]="isActiveTab('/admin', 'audit')" [class.font-bold]="isActiveTab('/admin', 'audit')">
+                            <i class="pi pi-shield text-xs"></i> Audit Logs
+                        </a>
+                    </div>
+
+                    <!-- User/Player Portal Specific Tabs -->
+                    <div class="flex flex-col gap-1 border-t border-slate-100 dark:border-slate-800 pt-3" *ngIf="isPlayer() && isCurrentRouteUser()">
+                        <span class="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-1.5">Chức năng Thành Viên</span>
+                        <a routerLink="/user" [queryParams]="{tab: 'challenges'}" (click)="closeMobileMenu()" class="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-lg no-underline transition"
+                           [class.text-primary]="isActiveTab('/user', 'challenges')" [class.font-bold]="isActiveTab('/user', 'challenges')">
+                            <i class="pi pi-bolt text-xs"></i> Thách Đấu & Ghi Nhận
+                        </a>
+                        <a routerLink="/user" [queryParams]="{tab: 'matches'}" (click)="closeMobileMenu()" class="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-lg no-underline transition"
+                           [class.text-primary]="isActiveTab('/user', 'matches')" [class.font-bold]="isActiveTab('/user', 'matches')">
+                            <i class="pi pi-user text-xs"></i> Trận Đấu & Elo
+                        </a>
+                        <a routerLink="/user" [queryParams]="{tab: 'tournaments'}" (click)="closeMobileMenu()" class="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800/40 rounded-lg no-underline transition"
+                           [class.text-primary]="isActiveTab('/user', 'tournaments')" [class.font-bold]="isActiveTab('/user', 'tournaments')">
+                            <i class="pi pi-trophy text-xs"></i> Giải Đấu
+                        </a>
+                    </div>
+                </ng-container>
+            </div>
+
+            <!-- Drawer Footer (User Info & Logout / Login) -->
+            <div class="border-t border-slate-100 dark:border-slate-800 pt-4 flex flex-col gap-3">
+                <ng-container *ngIf="isLoggedIn()">
+                    <!-- User Greeting -->
+                    <div class="text-xs text-slate-500 font-medium">
+                        Chào, <strong class="text-primary">{{ getUserName() }}</strong>
+                    </div>
+
+                    <!-- Change Password -->
+                    <button type="button" class="w-full flex items-center justify-start gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg border-none bg-transparent cursor-pointer transition"
+                            (click)="closeMobileMenu(); openChangePasswordDialog()">
+                        <i class="pi pi-key text-xs"></i> Đổi mật khẩu
+                    </button>
+
+                    <!-- Logout Button -->
+                    <button type="button" class="w-full flex items-center justify-start gap-2.5 px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg border-none bg-transparent cursor-pointer transition"
+                            (click)="closeMobileMenu(); logout()">
+                        <i class="pi pi-sign-out text-xs"></i> Đăng xuất
+                    </button>
+                </ng-container>
+
+                <ng-container *ngIf="!isLoggedIn()">
+                    <button type="button" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold bg-primary text-white rounded-xl border-none cursor-pointer transition"
+                            routerLink="/auth/login" (click)="closeMobileMenu()">
+                        <i class="pi pi-sign-in"></i> Đăng nhập
+                    </button>
+                </ng-container>
             </div>
         </div>
 
@@ -195,8 +325,7 @@ import { EvnictDataService } from '../../pages/evnict/domain/evnict-data.service
                     {{ passwordChangeMessage }}
                 </p>
             </div>
-        </p-dialog>
-    </div>`
+        </p-dialog>`
 })
 export class AppTopbar {
     layoutService = inject(LayoutService);
@@ -205,6 +334,15 @@ export class AppTopbar {
 
     showNotificationsDialog = false;
     showChangePasswordDialog = false;
+    showMobileMenu = false;
+
+    toggleMobileMenu(): void {
+        this.showMobileMenu = !this.showMobileMenu;
+    }
+
+    closeMobileMenu(): void {
+        this.showMobileMenu = false;
+    }
     passwordForm = {
         currentPassword: '',
         newPassword: '',
@@ -309,7 +447,8 @@ export class AppTopbar {
     isPlayer(): boolean {
         const id = this.dataService.getLoggedInUserId();
         if (!id) return false;
-        return this.dataService.getMemberById(id)?.roles.includes('player') ?? false;
+        const roles = this.dataService.getMemberById(id)?.roles ?? [];
+        return roles.includes('player') || roles.includes('referee');
     }
 
     hasBothRoles(): boolean {

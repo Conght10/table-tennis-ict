@@ -546,3 +546,16 @@ body {
         transition: none !important;
     }
 }
+
+/* Mobile Menu Drawer Styling */
+.mobile-menu-drawer {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.mobile-menu-drawer.translate-x-full {
+    transform: translateX(100%) !important;
+}
+
+.mobile-menu-drawer.translate-x-0 {
+    transform: translateX(0) !important;
+}
