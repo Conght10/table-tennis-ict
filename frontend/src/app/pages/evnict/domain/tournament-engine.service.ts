@@ -64,15 +64,22 @@ export class TournamentEngineService {
             return null;
         }
 
-        const pots = potRanges.map((range) =>
-            players
-                .filter((player) => player.seed >= range.min && player.seed <= range.max)
-                .sort((left, right) => left.seed - right.seed)
+        const sortedPlayers = [...players].sort((left, right) => (left.seed ?? 999999) - (right.seed ?? 999999));
+        let pots = potRanges.map((range) =>
+            sortedPlayers.filter((player) => player.seed >= range.min && player.seed <= range.max)
         );
 
-        const teamCount = pots[0].length;
+        let teamCount = pots[0]?.length || 0;
         if (!teamCount || pots.some((pot) => pot.length !== teamCount)) {
-            return null;
+            // Dynamic slice partitioning: divide sorted players into 3 equal pots (top 1/3, middle 1/3, bottom 1/3)
+            teamCount = Math.floor(sortedPlayers.length / teamSize);
+            if (!teamCount) return null;
+
+            pots = [
+                sortedPlayers.slice(0, teamCount),
+                sortedPlayers.slice(teamCount, teamCount * 2),
+                sortedPlayers.slice(teamCount * 2, teamCount * 3)
+            ];
         }
 
         let bestTeams: SeededCompetitor[][] | null = null;

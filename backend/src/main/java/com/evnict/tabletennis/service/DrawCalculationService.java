@@ -127,20 +127,29 @@ public class DrawCalculationService {
             return null;
         }
 
+        List<SeededCompetitor> sortedPlayers = players.stream()
+            .sorted(Comparator.comparingInt(p -> p.seed != null ? p.seed : 999))
+            .collect(Collectors.toList());
+
         List<List<SeededCompetitor>> pots = new ArrayList<>();
         for (PotRange range : potRanges) {
-            List<SeededCompetitor> pot = players.stream()
+            List<SeededCompetitor> pot = sortedPlayers.stream()
                 .filter(p -> p.seed != null && p.seed >= range.min && p.seed <= range.max)
-                .sorted(Comparator.comparingInt(p -> p.seed))
                 .collect(Collectors.toList());
             pots.add(pot);
         }
 
         int teamCount = pots.get(0).size();
-        for (List<SeededCompetitor> pot : pots) {
-            if (pot.size() != teamCount || teamCount == 0) {
-                return null;
-            }
+        boolean validRanges = teamCount > 0 && pots.stream().allMatch(p -> p.size() == teamCount);
+
+        if (!validRanges) {
+            teamCount = sortedPlayers.size() / teamSize;
+            if (teamCount == 0) return null;
+
+            pots = new ArrayList<>();
+            pots.add(new ArrayList<>(sortedPlayers.subList(0, teamCount)));
+            pots.add(new ArrayList<>(sortedPlayers.subList(teamCount, teamCount * 2)));
+            pots.add(new ArrayList<>(sortedPlayers.subList(teamCount * 2, Math.min(teamCount * 3, sortedPlayers.size()))));
         }
 
         List<List<SeededCompetitor>> bestTeams = null;
@@ -482,20 +491,29 @@ public class DrawCalculationService {
             return new ArrayList<>();
         }
 
+        List<SeededCompetitor> sortedPlayers = players.stream()
+            .sorted(Comparator.comparingInt(p -> p.seed != null ? p.seed : 999))
+            .collect(Collectors.toList());
+
         List<List<SeededCompetitor>> pots = new ArrayList<>();
         for (PotRange range : potRanges) {
-            List<SeededCompetitor> pot = players.stream()
+            List<SeededCompetitor> pot = sortedPlayers.stream()
                 .filter(p -> p.seed != null && p.seed >= range.min && p.seed <= range.max)
-                .sorted(Comparator.comparingInt(p -> p.seed))
                 .collect(Collectors.toList());
             pots.add(pot);
         }
 
         int teamCount = pots.get(0).size();
-        for (List<SeededCompetitor> pot : pots) {
-            if (pot.size() != teamCount || teamCount == 0) {
-                return new ArrayList<>();
-            }
+        boolean validRanges = teamCount > 0 && pots.stream().allMatch(p -> p.size() == teamCount);
+
+        if (!validRanges) {
+            teamCount = sortedPlayers.size() / teamSize;
+            if (teamCount == 0) return new ArrayList<>();
+
+            pots = new ArrayList<>();
+            pots.add(new ArrayList<>(sortedPlayers.subList(0, teamCount)));
+            pots.add(new ArrayList<>(sortedPlayers.subList(teamCount, teamCount * 2)));
+            pots.add(new ArrayList<>(sortedPlayers.subList(teamCount * 2, Math.min(teamCount * 3, sortedPlayers.size()))));
         }
 
         List<DrawCandidate> candidates = new ArrayList<>();
