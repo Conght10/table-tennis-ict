@@ -1506,7 +1506,19 @@ export class EvnictDataService {
         if (t.format === 'round_robin') {
             t.groups = [{ groupName: 'Vòng tròn', competitors }];
         } else {
-            t.groups = this.tournamentEngine.generateRandomGroups(competitors, t.groupSize ?? 4);
+            const registrationSeedMap = new Map((t.registrations || []).map(r => [r.memberId, r.seed || 999]));
+            const strengthMap: Record<string, number> = {};
+            if (t.type === 'team' || t.type === 'double') {
+                for (const team of t.teams || []) {
+                    const seedTotal = team.players.reduce((sum, p) => sum + (registrationSeedMap.get(p.id) || 0), 0);
+                    strengthMap[team.id] = seedTotal;
+                }
+            } else {
+                for (const pid of participantIds) {
+                    strengthMap[pid] = registrationSeedMap.get(pid) || 0;
+                }
+            }
+            t.groups = this.tournamentEngine.generateBalancedGroups(competitors, t.groupSize ?? 4, strengthMap);
         }
 
         t.scores = t.groups.flatMap((group) => {
@@ -1842,7 +1854,7 @@ export class EvnictDataService {
     }
 
     syncKnockoutMatchesFromStandings(t: Tournament): void {
-        if (!t || !t.standings || t.standings.length === 0) return;
+        if (!t || t.stage !== 'knockout' || !t.standings || t.standings.length === 0) return;
 
         const groupA = t.standings.find(s => s.groupName === 'A');
         const groupB = t.standings.find(s => s.groupName === 'B');
@@ -1904,7 +1916,15 @@ export class EvnictDataService {
 
     generateKnockoutStage(tournamentId: string): boolean {
         const t = this.tournaments.find((x) => x.id === tournamentId);
-        if (!t || !t.standings || t.standings.length === 0) return false;
+        if (!t || !t.scores || t.scores.length === 0) return false;
+
+        const allGroupMatchesCompleted = t.scores.every((m: any) =>
+            !!(m.completed || m.homeScore >= 3 || m.awayScore >= 3 || (t.type !== 'team' && (m.homeScore > 0 || m.awayScore > 0)))
+        );
+        if (!allGroupMatchesCompleted) return false;
+
+        t.standings = this.tournamentEngine.computeGroupStandings(t.groups || [], t.scores);
+        if (!t.standings || t.standings.length === 0) return false;
 
         const allQualified = this.tournamentEngine.pickQualified(t.standings, 2);
         if (allQualified.length === 2) {

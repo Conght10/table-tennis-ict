@@ -2029,6 +2029,15 @@ public class TournamentController {
         if (staleWrite != null) {
             return staleWrite;
         }
+        if (tournament.getScores() == null || tournament.getScores().isEmpty()) {
+            return ResponseEntity.badRequest().body("Chưa có trận đấu vòng bảng nào.");
+        }
+        boolean allCompleted = tournament.getScores().stream()
+                .allMatch(score -> isScoreCompletedForStanding(toObjectMap(score)));
+        if (!allCompleted) {
+            return ResponseEntity.badRequest().body("Chưa hoàn thành tất cả các trận đấu vòng bảng trước khi bốc thăm nhánh đấu trực tiếp.");
+        }
+
         List<Object> standings = computeStandingsFromScores(tournament.getGroups(), tournament.getScores());
         List<Object> knockoutMatches = buildInitialKnockoutMatches(standings);
         if (knockoutMatches.isEmpty()) {

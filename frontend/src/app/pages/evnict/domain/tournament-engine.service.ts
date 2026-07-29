@@ -75,35 +75,33 @@ export class TournamentEngineService {
             return null;
         }
 
-        // Shuffle within each pot (Fisher-Yates) so that re-runs produce different team compositions
-        // while still preserving the tier balance (one player per tier per team)
-        const shuffledPots = pots.map(pot => {
-            const arr = [...pot];
-            for (let i = arr.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [arr[i], arr[j]] = [arr[j], arr[i]];
-            }
-            return arr;
-        });
-
         let bestTeams: SeededCompetitor[][] | null = null;
         let bestScore = Number.POSITIVE_INFINITY;
 
-        for (let middleShift = 0; middleShift < teamCount; middleShift += 1) {
-            for (let weakShift = 0; weakShift < teamCount; weakShift += 1) {
-                const candidateTeams: SeededCompetitor[][] = [];
-                for (let i = 0; i < teamCount; i += 1) {
-                    candidateTeams.push([
-                        shuffledPots[0][i],
-                        shuffledPots[1][(i + middleShift) % teamCount],
-                        shuffledPots[2][(i + weakShift) % teamCount]
-                    ]);
-                }
+        // Try multiple pot permutations (straight & reversed ordering, random shuffles) to find optimal team combinations
+        const pot0 = [...pots[0]];
+        const pot1Variants = [[...pots[1]], [...pots[1]].reverse()];
+        const pot2Variants = [[...pots[2]], [...pots[2]].reverse()];
 
-                const score = this.evaluateSeededTeams(candidateTeams, maxFemalePerTeam);
-                if (score < bestScore) {
-                    bestScore = score;
-                    bestTeams = candidateTeams;
+        for (const p1 of pot1Variants) {
+            for (const p2 of pot2Variants) {
+                for (let middleShift = 0; middleShift < teamCount; middleShift += 1) {
+                    for (let weakShift = 0; weakShift < teamCount; weakShift += 1) {
+                        const candidateTeams: SeededCompetitor[][] = [];
+                        for (let i = 0; i < teamCount; i += 1) {
+                            candidateTeams.push([
+                                pot0[i],
+                                p1[(i + middleShift) % teamCount],
+                                p2[(i + weakShift) % teamCount]
+                            ]);
+                        }
+
+                        const score = this.evaluateSeededTeams(candidateTeams, maxFemalePerTeam);
+                        if (score < bestScore) {
+                            bestScore = score;
+                            bestTeams = candidateTeams;
+                        }
+                    }
                 }
             }
         }
@@ -294,7 +292,6 @@ export class TournamentEngineService {
     }
 
     generateRandomGroups<TCompetitor extends Competitor>(competitors: readonly TCompetitor[], groupSize: number): GroupAssignment<TCompetitor>[] {
-
         const effectiveGroupSize = Math.max(groupSize, 2);
         const shuffled = this.shuffle(competitors);
         const groups: GroupAssignment<TCompetitor>[] = [];
@@ -310,6 +307,81 @@ export class TournamentEngineService {
         }
 
         return groups;
+    }
+
+    generateBalancedGroups<TCompetitor extends Competitor>(
+        competitors: readonly TCompetitor[],
+        groupSize: number,
+        strengthMap?: Map<string, number> | Record<string, number>
+    ): GroupAssignment<TCompetitor>[] {
+        const n = competitors.length;
+        if (n <= 1) {
+            return [{ groupName: 'A', competitors: [...competitors] }];
+        }
+
+        const k = Math.ceil(n / Math.max(groupSize, 2));
+        if (k <= 1) {
+            return [{ groupName: 'A', competitors: [...competitors] }];
+        }
+
+        const baseSize = Math.floor(n / k);
+        const remainder = n % k;
+        const targetSizes: number[] = [];
+        for (let i = 0; i < k; i++) {
+            targetSizes.push(i < remainder ? baseSize + 1 : baseSize);
+        }
+
+        const getStrength = (id: string): number => {
+            if (!strengthMap) return 0;
+            if (strengthMap instanceof Map) return strengthMap.get(id) ?? 0;
+            return (strengthMap as Record<string, number>)[id] ?? 0;
+        };
+
+        const currentPartition: TCompetitor[][] = Array.from({ length: k }, () => []);
+        let bestPartition: TCompetitor[][] = Array.from({ length: k }, () => []);
+        let minDiff = Number.MAX_VALUE;
+
+        const search = (index: number) => {
+            if (index === n) {
+                let minAvg = Number.MAX_VALUE;
+                let maxAvg = -Number.MAX_VALUE;
+                for (const grp of currentPartition) {
+                    const sum = grp.reduce((s, c) => s + getStrength(c.id), 0);
+                    const avg = grp.length ? sum / grp.length : 0;
+                    if (avg < minAvg) minAvg = avg;
+                    if (avg > maxAvg) maxAvg = avg;
+                }
+                const diff = maxAvg - minAvg;
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    bestPartition = currentPartition.map((grp) => [...grp]);
+                }
+                return;
+            }
+
+            const comp = competitors[index];
+            for (let i = 0; i < k; i++) {
+                if (currentPartition[i].length < targetSizes[i]) {
+                    if (currentPartition[i].length === 0) {
+                        currentPartition[i].push(comp);
+                        search(index + 1);
+                        currentPartition[i].pop();
+                        break;
+                    } else {
+                        currentPartition[i].push(comp);
+                        search(index + 1);
+                        currentPartition[i].pop();
+                    }
+                }
+            }
+        };
+
+        search(0);
+
+        return bestPartition.map((compList, i) => ({
+            groupName: String.fromCharCode(65 + i),
+            competitors: compList
+        }));
     }
 
     computeGroupStandings<TCompetitor extends Competitor>(groups: readonly GroupAssignment<TCompetitor>[], scores: readonly GroupMatchScore[]): GroupStanding<TCompetitor>[] {

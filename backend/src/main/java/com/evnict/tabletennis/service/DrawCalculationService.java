@@ -146,21 +146,29 @@ public class DrawCalculationService {
         List<List<SeededCompetitor>> bestTeams = null;
         double bestScore = Double.POSITIVE_INFINITY;
 
-        for (int middleShift = 0; middleShift < teamCount; middleShift++) {
-            for (int weakShift = 0; weakShift < teamCount; weakShift++) {
-                List<List<SeededCompetitor>> candidateTeams = new ArrayList<>();
-                for (int i = 0; i < teamCount; i++) {
-                    List<SeededCompetitor> teamPlayers = new ArrayList<>();
-                    teamPlayers.add(pots.get(0).get(i));
-                    teamPlayers.add(pots.get(1).get((i + middleShift) % teamCount));
-                    teamPlayers.add(pots.get(2).get((i + weakShift) % teamCount));
-                    candidateTeams.add(teamPlayers);
-                }
+        List<SeededCompetitor> pot0 = new ArrayList<>(pots.get(0));
+        List<List<SeededCompetitor>> pot1Variants = List.of(new ArrayList<>(pots.get(1)), reverseList(pots.get(1)));
+        List<List<SeededCompetitor>> pot2Variants = List.of(new ArrayList<>(pots.get(2)), reverseList(pots.get(2)));
 
-                double score = evaluateSeededTeams(candidateTeams, maxFemalePerTeam);
-                if (score < bestScore) {
-                    bestScore = score;
-                    bestTeams = candidateTeams;
+        for (List<SeededCompetitor> p1 : pot1Variants) {
+            for (List<SeededCompetitor> p2 : pot2Variants) {
+                for (int middleShift = 0; middleShift < teamCount; middleShift++) {
+                    for (int weakShift = 0; weakShift < teamCount; weakShift++) {
+                        List<List<SeededCompetitor>> candidateTeams = new ArrayList<>();
+                        for (int i = 0; i < teamCount; i++) {
+                            List<SeededCompetitor> teamPlayers = new ArrayList<>();
+                            teamPlayers.add(pot0.get(i));
+                            teamPlayers.add(p1.get((i + middleShift) % teamCount));
+                            teamPlayers.add(p2.get((i + weakShift) % teamCount));
+                            candidateTeams.add(teamPlayers);
+                        }
+
+                        double score = evaluateSeededTeams(candidateTeams, maxFemalePerTeam);
+                        if (score < bestScore) {
+                            bestScore = score;
+                            bestTeams = candidateTeams;
+                        }
+                    }
                 }
             }
         }
@@ -492,16 +500,25 @@ public class DrawCalculationService {
 
         List<DrawCandidate> candidates = new ArrayList<>();
 
-        for (int middleShift = 0; middleShift < teamCount; middleShift++) {
-            for (int weakShift = 0; weakShift < teamCount; weakShift++) {
-                List<List<SeededCompetitor>> candidateTeams = new ArrayList<>();
-                for (int i = 0; i < teamCount; i++) {
-                    List<SeededCompetitor> teamPlayers = new ArrayList<>();
-                    teamPlayers.add(pots.get(0).get(i));
-                    teamPlayers.add(pots.get(1).get((i + middleShift) % teamCount));
-                    teamPlayers.add(pots.get(2).get((i + weakShift) % teamCount));
-                    candidateTeams.add(teamPlayers);
-                }
+        List<SeededCompetitor> pot0 = new ArrayList<>(pots.get(0));
+        List<List<SeededCompetitor>> pot1Variants = List.of(new ArrayList<>(pots.get(1)), reverseList(pots.get(1)));
+        List<List<SeededCompetitor>> pot2Variants = List.of(new ArrayList<>(pots.get(2)), reverseList(pots.get(2)));
+
+        int varIdx = 0;
+        for (int v1 = 0; v1 < pot1Variants.size(); v1++) {
+            List<SeededCompetitor> p1 = pot1Variants.get(v1);
+            for (int v2 = 0; v2 < pot2Variants.size(); v2++) {
+                List<SeededCompetitor> p2 = pot2Variants.get(v2);
+                for (int middleShift = 0; middleShift < teamCount; middleShift++) {
+                    for (int weakShift = 0; weakShift < teamCount; weakShift++) {
+                        List<List<SeededCompetitor>> candidateTeams = new ArrayList<>();
+                        for (int i = 0; i < teamCount; i++) {
+                            List<SeededCompetitor> teamPlayers = new ArrayList<>();
+                            teamPlayers.add(pot0.get(i));
+                            teamPlayers.add(p1.get((i + middleShift) % teamCount));
+                            teamPlayers.add(p2.get((i + weakShift) % teamCount));
+                            candidateTeams.add(teamPlayers);
+                        }
 
                 List<Integer> totals = new ArrayList<>();
                 int femaleViolations = 0;
@@ -545,6 +562,8 @@ public class DrawCalculationService {
                 }
                 candidate.teams = teams;
                 candidates.add(candidate);
+                    }
+                }
             }
         }
 
@@ -652,5 +671,11 @@ public class DrawCalculationService {
                 }
             }
         }
+    }
+
+    private <T> List<T> reverseList(List<T> list) {
+        List<T> copy = new ArrayList<>(list);
+        Collections.reverse(copy);
+        return copy;
     }
 }

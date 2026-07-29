@@ -534,7 +534,7 @@ import { Router, ActivatedRoute } from '@angular/router';
                                  <button class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold transition flex items-center gap-1.5 shadow border-none cursor-pointer" (click)="resetTournamentDraw(currTournament.id)">
                                      <i class="pi pi-refresh"></i> Chia Lại Giải Đấu
                                  </button>
-                                 <button *ngIf="currTournament.stage === 'group' && currTournament.status === 'ongoing'" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold transition flex items-center gap-1.5 shadow border-none cursor-pointer" (click)="startKnockoutStage(currTournament.id)">
+                                 <button *ngIf="currTournament.stage === 'group' && currTournament.status === 'ongoing' && isAllGroupMatchesCompleted()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold transition flex items-center gap-1.5 shadow border-none cursor-pointer" (click)="startKnockoutStage(currTournament.id)">
                                      <i class="pi pi-sitemap"></i> Bốc Thăm Nhánh Đấu Trực Tiếp
                                  </button>
                                  <button *ngIf="currTournament.stage === 'knockout' && isFinalMatchResolved() && currTournament.status === 'ongoing'" class="px-3.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-bold transition flex items-center gap-1.5 shadow border-none cursor-pointer" (click)="finishTournament(currTournament.id)">
@@ -4049,7 +4049,20 @@ export class AdminPortal implements OnInit {
         return this.memberName(id);
     }
 
+    isAllGroupMatchesCompleted(): boolean {
+        if (!this.currTournament || !this.currTournament.scores || this.currTournament.scores.length === 0) {
+            return false;
+        }
+        return this.currTournament.scores.every((m: any) =>
+            !!(m.completed || m.homeScore >= 3 || m.awayScore >= 3 || (this.currTournament?.type !== 'team' && (m.homeScore > 0 || m.awayScore > 0)))
+        );
+    }
+
     startKnockoutStage(tournamentId: string): void {
+        if (!this.isAllGroupMatchesCompleted()) {
+            this.openMessageDialog('Cần phải nhập kết quả toàn bộ các trận đấu vòng bảng trước khi bốc thăm nhánh đấu trực tiếp!');
+            return;
+        }
         this.dataService.generateKnockoutStage(tournamentId);
         this.reloadAll();
     }
