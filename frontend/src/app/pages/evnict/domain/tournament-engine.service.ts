@@ -46,7 +46,7 @@ export class TournamentEngineService {
 
             teams.push({
                 id: `team-${Math.floor(i / effectiveTeamSize) + 1}`,
-                name: `Doi ${Math.floor(i / effectiveTeamSize) + 1}`,
+                name: members[0]?.name ? `Đội ${members[0].name}` : `Đội ${Math.floor(i / effectiveTeamSize) + 1}`,
                 players: members.map((player) => ({ id: player.id, name: player.name }))
             });
         }
@@ -114,7 +114,7 @@ export class TournamentEngineService {
 
         return bestTeams.map((teamPlayers, index) => ({
             id: `team-${index + 1}`,
-            name: `Doi ${index + 1}`,
+            name: teamPlayers[0]?.name ? `Đội ${teamPlayers[0].name}` : `Đội ${index + 1}`,
             players: teamPlayers.map((player) => ({ id: player.id, name: player.name }))
         }));
     }

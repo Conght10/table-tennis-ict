@@ -25,7 +25,12 @@ interface ParticipationView {
         <div class="portal-shell grid grid-cols-12 gap-6">
 
             <div class="col-span-12 screen-hero">
-                <h2 class="screen-hero__title">Bảng Điều Khiển Vận Động Viên EVNICT</h2>
+                <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+                    <h2 class="screen-hero__title m-0">Bảng Điều Khiển Vận Động Viên EVNICT</h2>
+                    <button class="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 border border-white/30 cursor-pointer" (click)="refreshAllData()">
+                        <i class="pi pi-refresh" [class.pi-spin]="isRefreshing"></i> Làm mới dữ liệu
+                    </button>
+                </div>
                 <p class="screen-hero__subtitle">Theo dõi Elo cá nhân, quản lý kèo thách đấu và cập nhật tiến trình giải đấu theo thời gian thực.</p>
                 <div class="screen-hero__metrics">
                     <span class="screen-hero__metric">VĐV: <strong>{{ currentUser?.fullName || 'N/A' }}</strong></span>
@@ -664,10 +669,17 @@ interface ParticipationView {
                                                             <span class="text-xxs px-2.5 py-0.5 bg-primary/10 text-primary rounded-full font-bold">Vòng loại</span>
                                                         </div>
                                                         <div class="space-y-2">
-                                                            <div *ngFor="let comp of g.competitors" class="p-3 bg-white dark:bg-slate-900 border border-surface-200 rounded-lg flex flex-col gap-2 shadow-sm">
-                                                                <div class="flex items-center gap-2 font-bold text-xs text-slate-800 dark:text-slate-200">
-                                                                    <i class="pi pi-shield text-slate-400 text-xs"></i>
-                                                                    <span>{{ comp.name }}</span>
+                                                            <div *ngFor="let comp of g.competitors"
+                                                                 [title]="getTeamPlayersText(comp.id) ? ('Thành viên: ' + getTeamPlayersText(comp.id)) : comp.name"
+                                                                 class="p-3 bg-white dark:bg-slate-900 border border-surface-200 rounded-lg flex flex-col gap-2 shadow-sm hover:border-primary/40 transition-colors">
+                                                                <div class="flex items-center justify-between gap-2 font-bold text-xs text-slate-800 dark:text-slate-200">
+                                                                    <div class="flex items-center gap-2">
+                                                                        <i class="pi pi-shield text-slate-400 text-xs"></i>
+                                                                        <span>{{ comp.name }}</span>
+                                                                    </div>
+                                                                    <span *ngIf="getTeamPlayersText(comp.id)" class="text-[10px] font-normal text-slate-400">
+                                                                        {{ getTeamPlayersText(comp.id) }}
+                                                                    </span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -709,6 +721,7 @@ interface ParticipationView {
                                                     </thead>
                                                     <tbody>
                                                         <tr *ngFor="let row of standing.rows" class="border-b border-surface-100 transition-all text-xs"
+                                                            [title]="getTeamPlayersText(row.competitor.id) ? ('Thành viên: ' + getTeamPlayersText(row.competitor.id)) : row.competitor.name"
                                                             [class.bg-green-50/40]="row.rank <= 2" [class.dark:bg-green-950/10]="row.rank <= 2"
                                                             [class.bg-red-50/5]="row.rank > 2" [class.dark:bg-red-950/5]="row.rank > 2">
                                                             <td class="py-2.5 px-3 text-center font-extrabold" [class.text-green-600]="row.rank <= 2" [class.text-slate-400]="row.rank > 2">{{ row.rank }}</td>
@@ -1249,6 +1262,20 @@ interface ParticipationView {
     `]
 })
 export class UserPortal implements OnInit {
+    isRefreshing = false;
+
+    refreshAllData(): void {
+        this.isRefreshing = true;
+        this.dataService.reloadAll().then(() => {
+            this.allTournaments = this.dataService.getTournaments();
+            const currentId = this.currentUser?.id;
+            if (currentId) {
+                this.currentUser = this.dataService.getMemberById(currentId);
+            }
+            this.isRefreshing = false;
+        }).catch(() => { this.isRefreshing = false; });
+    }
+
     activeTab = 'challenges';
     tabs = [
         { id: 'challenges', label: 'Thách Đấu', icon: 'pi pi-send' },

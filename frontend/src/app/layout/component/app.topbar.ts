@@ -82,8 +82,8 @@ import { EvnictDataService } from '../../pages/evnict/domain/evnict-data.service
         </div>
 
         <div class="layout-topbar-actions ml-auto">
-            <!-- Mobile Menu Toggle -->
-            <button type="button" class="layout-topbar-action lg:hidden" (click)="toggleMobileMenu()" aria-label="Toggle navigation menu">
+            <!-- Mobile Menu Toggle (strictly hidden on desktop screens) -->
+            <button type="button" class="layout-topbar-action !hidden max-lg:!inline-flex" (click)="toggleMobileMenu()" aria-label="Toggle navigation menu">
                 <i class="pi pi-bars"></i>
             </button>
 

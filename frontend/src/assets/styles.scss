@@ -150,6 +150,14 @@ body {
     border: 1px solid transparent;
 }
 
+@media (min-width: 992px) {
+    .layout-topbar .layout-topbar-action.lg\:hidden,
+    .layout-topbar .layout-topbar-action[class*="lg:hidden"],
+    .layout-topbar-actions > button.lg\:hidden {
+        display: none !important;
+    }
+}
+
 .evnict-modern-shell .layout-topbar .layout-topbar-action:hover {
     border-color: var(--ev-card-border);
     background: rgba(148, 163, 184, 0.14);

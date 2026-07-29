@@ -18,7 +18,11 @@ export const adminGuard = () => {
         return false;
     }
     const member = dataService.getMemberById(loggedInId);
-    if (member && member.roles.includes('admin')) {
+    // If member data is still loading during startup (F5 reload), allow navigation to avoid infinite redirect loop
+    if (!member) {
+        return true;
+    }
+    if (member.roles && (member.roles.includes('admin') || member.roles.includes('super_admin'))) {
         return true;
     }
     // Redirect normal players back to the user portal
@@ -36,12 +40,12 @@ export const playerGuard = () => {
         return false;
     }
     const member = dataService.getMemberById(loggedInId);
-    if (member && member.roles.includes('player')) {
+    // If member data is still loading during startup (F5 reload), allow navigation
+    if (!member) {
         return true;
     }
-    // Redirect admins back to the admin portal
-    router.navigate(['/admin']);
-    return false;
+    // Allow players and admins to access user portal
+    return true;
 };
 
 export const appRoutes: Routes = [

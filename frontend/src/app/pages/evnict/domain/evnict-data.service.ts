@@ -196,6 +196,10 @@ export class EvnictDataService {
     private notifications: AppNotification[] = [];
     private auditLogs: AuditLog[] = [];
     private bookings: CourtBooking[] = [];
+    private auditLogsLoaded = false;
+    private matchesLoaded = false;
+    private loadedChallengeUsers = new Set<string>();
+    private loadedNotificationUsers = new Set<string>();
     private readonly tournamentSyncInFlight = new Set<string>();
     private readonly tournamentSyncQueued = new Set<string>();
     /** Stores a desired seed order per tournament that must survive server round-trips until confirmed */
@@ -205,10 +209,24 @@ export class EvnictDataService {
         private readonly eloService: EloService,
         private readonly tournamentEngine: TournamentEngineService,
         private readonly http: HttpClient
-    ) {}
+    ) { }
 
     init(): Promise<boolean> {
         return new Promise((resolve) => {
+            let resolved = false;
+            const safeResolve = () => {
+                if (!resolved) {
+                    resolved = true;
+                    resolve(true);
+                }
+            };
+
+            // Safety fallback timer: Never block APP_INITIALIZER for more than 4 seconds if backend is slow/cold-starting
+            const timer = setTimeout(() => {
+                console.warn('[EvnictDataService] Startup data load timed out after 4s, proceeding to boot app.');
+                safeResolve();
+            }, 4000);
+
             const loggedIn = this.getLoggedInUserId();
             const promises: Promise<any>[] = [
                 firstValueFrom(this.http.get<Member[]>(`${this.apiUrl}/members`)).then(data => {
@@ -230,11 +248,13 @@ export class EvnictDataService {
             }
 
             Promise.all(promises).then(() => {
+                clearTimeout(timer);
                 this.refreshAllTeamSubMatchHandicapTexts(false);
-                resolve(true);
+                safeResolve();
             }).catch(err => {
+                clearTimeout(timer);
                 console.error('Failed to load startup data from backend', err);
-                resolve(true); // Don't block app boot if backend is offline during test
+                safeResolve();
             });
         });
     }
@@ -466,10 +486,10 @@ export class EvnictDataService {
             registrations: tournament.registrations || [],
             drawRules: tournament.drawRules
                 ? {
-                      ...this.defaultDrawRules,
-                      ...tournament.drawRules,
-                      seededPotRanges: (tournament.drawRules.seededPotRanges || this.defaultDrawRules.seededPotRanges).map((item) => ({ ...item }))
-                  }
+                    ...this.defaultDrawRules,
+                    ...tournament.drawRules,
+                    seededPotRanges: (tournament.drawRules.seededPotRanges || this.defaultDrawRules.seededPotRanges).map((item) => ({ ...item }))
+                }
                 : { ...this.defaultDrawRules, seededPotRanges: this.defaultDrawRules.seededPotRanges.map((item) => ({ ...item })) },
             drawRevisionCurrent: tournament.drawRevisionCurrent || 0,
             drawRevisions: tournament.drawRevisions || [],
@@ -1109,7 +1129,61 @@ export class EvnictDataService {
     }
 
     // --- TOURNAMENTS SECTION ---
+
+    private tournamentsLoaded = false;
+
+    loadTournamentsIfNeeded(): Promise<Tournament[]> {
+        if (!this.tournamentsLoaded) {
+            return this.reloadTournaments();
+        }
+        return Promise.resolve(this.tournaments);
+    }
+
+    reloadTournaments(): Promise<Tournament[]> {
+        this.tournamentsLoaded = true;
+        return firstValueFrom(this.http.get<Tournament[]>(`${this.apiUrl}/tournaments`)).then(data => {
+            this.tournaments = data.map((tournament) => this.hydrateTournamentDerivedData(tournament));
+            this.tournaments.forEach(t => this.autoCheckAndGenerateFinal(t, true));
+            return this.tournaments;
+        }).catch(err => {
+            console.error('Failed to reload tournaments', err);
+            return this.tournaments;
+        });
+    }
+
+    reloadMembers(): Promise<Member[]> {
+        return firstValueFrom(this.http.get<Member[]>(`${this.apiUrl}/members`)).then(data => {
+            this.members = data.map((m) => ({ ...m, rankTier: this.normalizeRankTier(m.rankTier) }));
+            return this.members;
+        });
+    }
+
+    reloadAuditLogs(): Promise<AuditLog[]> {
+        this.auditLogsLoaded = true;
+        return firstValueFrom(this.http.get<AuditLog[]>(`${this.apiUrl}/audit-logs`)).then(data => {
+            this.auditLogs = data;
+            return this.auditLogs;
+        });
+    }
+
+    reloadMatches(): Promise<MatchRecord[]> {
+        this.matchesLoaded = true;
+        return firstValueFrom(this.http.get<MatchRecord[]>(`${this.apiUrl}/matches`)).then(data => {
+            this.matches = data;
+            return this.matches;
+        });
+    }
+
+    reloadAll(): Promise<boolean> {
+        return Promise.all([
+            this.reloadMembers(),
+            this.reloadTournaments(),
+            this.reloadMatches()
+        ]).then(() => true);
+    }
+
     getTournaments(): Tournament[] {
+        this.loadTournamentsIfNeeded();
         this.refreshAllTeamSubMatchHandicapTexts(false);
         return this.tournaments.map((t) => this.hydrateTournamentDerivedData(t));
     }
@@ -1453,7 +1527,7 @@ export class EvnictDataService {
     resetTournamentDraw(id: string): boolean {
         const t = this.tournaments.find((x) => x.id === id);
         if (!t) return false;
-        
+
         t.status = 'draft';
         t.groups = [];
         t.scores = [];
@@ -1517,6 +1591,7 @@ export class EvnictDataService {
         }
 
         t.standings = this.tournamentEngine.computeGroupStandings(t.groups, t.scores);
+        this.syncKnockoutMatchesFromStandings(t);
         this.postTournamentMatchResult(tournamentId, '/matches/group/result', {
             groupName,
             homeCompetitorId: homeId,
@@ -1751,6 +1826,7 @@ export class EvnictDataService {
             this.autoCheckAndGenerateFinal(t);
         } else {
             t.standings = this.tournamentEngine.computeGroupStandings(t.groups || [], t.scores || []);
+            this.syncKnockoutMatchesFromStandings(t);
         }
 
         this.postTournamentMatchResult(tournamentId, '/matches/team-sub/result', {
@@ -1763,6 +1839,67 @@ export class EvnictDataService {
             recordedById: this.loggedInUserId || undefined
         });
         return true;
+    }
+
+    syncKnockoutMatchesFromStandings(t: Tournament): void {
+        if (!t || !t.standings || t.standings.length === 0) return;
+
+        const groupA = t.standings.find(s => s.groupName === 'A');
+        const groupB = t.standings.find(s => s.groupName === 'B');
+
+        let a1: string | undefined;
+        let a2: string | undefined;
+        let b1: string | undefined;
+        let b2: string | undefined;
+
+        if (groupA && groupB && groupA.rows.length >= 2 && groupB.rows.length >= 2) {
+            a1 = groupA.rows.find(r => r.rank === 1)?.competitor.id;
+            a2 = groupA.rows.find(r => r.rank === 2)?.competitor.id;
+            b1 = groupB.rows.find(r => r.rank === 1)?.competitor.id;
+            b2 = groupB.rows.find(r => r.rank === 2)?.competitor.id;
+        }
+
+        if (a1 && a2 && b1 && b2) {
+            if (!t.knockoutMatches || t.knockoutMatches.length === 0) {
+                t.knockoutMatches = [
+                    {
+                        id: 'sf-1',
+                        roundName: 'Semifinals',
+                        homeCompetitorId: a1,
+                        awayCompetitorId: b2,
+                        homeScore: 0,
+                        awayScore: 0
+                    },
+                    {
+                        id: 'sf-2',
+                        roundName: 'Semifinals',
+                        homeCompetitorId: b1,
+                        awayCompetitorId: a2,
+                        homeScore: 0,
+                        awayScore: 0
+                    }
+                ];
+            } else {
+                const sf1 = t.knockoutMatches.find(m => m.id === 'sf-1');
+                const sf2 = t.knockoutMatches.find(m => m.id === 'sf-2');
+                if (sf1 && !sf1.completed && !(sf1.subMatches && sf1.subMatches.some(sm => sm.completed))) {
+                    if (sf1.homeCompetitorId !== a1 || sf1.awayCompetitorId !== b2) {
+                        sf1.homeCompetitorId = a1;
+                        sf1.awayCompetitorId = b2;
+                        sf1.lineup = undefined;
+                        sf1.subMatches = undefined;
+                    }
+                }
+                if (sf2 && !sf2.completed && !(sf2.subMatches && sf2.subMatches.some(sm => sm.completed))) {
+                    if (sf2.homeCompetitorId !== b1 || sf2.awayCompetitorId !== a2) {
+                        sf2.homeCompetitorId = b1;
+                        sf2.awayCompetitorId = a2;
+                        sf2.lineup = undefined;
+                        sf2.subMatches = undefined;
+                    }
+                }
+            }
+        }
     }
 
     generateKnockoutStage(tournamentId: string): boolean {
@@ -2304,6 +2441,23 @@ export class EvnictDataService {
         return true;
     }
 
+    /** Batch update seeds with custom seed values (allows non-contiguous seed numbers) */
+    saveBatchSeeds(tournamentId: string, seedUpdates: Array<{ memberId: string; seed: number }>): boolean {
+        const t = this.tournaments.find((x) => x.id === tournamentId);
+        if (!t || t.status !== 'draft' || !t.registrations) return false;
+
+        for (const item of seedUpdates) {
+            const reg = t.registrations.find(r => r.memberId === item.memberId);
+            if (reg && typeof item.seed === 'number' && item.seed > 0) {
+                reg.seed = item.seed;
+                reg.seedSource = 'manual';
+            }
+        }
+
+        this.syncTournamentToBackend(tournamentId);
+        return true;
+    }
+
     removePlayerFromTournament(tournamentId: string, memberId: string): boolean {
         const t = this.tournaments.find((x) => x.id === tournamentId);
         if (!t || t.status !== 'draft') return false;
@@ -2313,7 +2467,7 @@ export class EvnictDataService {
         if (t.participants && t.participants.includes(memberId)) {
             t.participants = t.participants.filter(pid => pid !== memberId);
             t.registrations = (t.registrations || []).filter((registration) => registration.memberId !== memberId);
-            
+
             // Clear teams/groups to avoid inconsistent draft states
             t.teams = [];
             t.groups = [];
@@ -2459,7 +2613,7 @@ export class EvnictDataService {
 
         const teamSize = t.teamSize || 3;
         const allTeams = t.teams || [];
-        
+
         // Find all teams that are missing players
         const deficitTeams = allTeams.filter(team => team.players.length < teamSize);
 
@@ -2470,7 +2624,7 @@ export class EvnictDataService {
         // 3. Collect remaining players from these deficit teams
         const poolPlayers: any[] = [];
         const oldTeamIds = deficitTeams.map(team => team.id);
-        
+
         for (const team of deficitTeams) {
             poolPlayers.push(...team.players);
         }
@@ -2483,14 +2637,14 @@ export class EvnictDataService {
         if (numNewTeams > 0) {
             const sourcePlayers = poolPlayers.map(p => ({ id: p.id, name: p.name }));
             const poolCaptains = sourcePlayers.filter(p => t.captains?.includes(p.id)).map(p => p.id);
-            
+
             const generated = this.tournamentEngine.generateTeamsWithCaptains(
                 sourcePlayers,
                 teamSize,
                 poolCaptains,
                 (pid) => this.getMemberRankStrength(pid)
             );
-            
+
             generated.forEach((team, index) => {
                 team.id = `team-reformed-${Date.now()}-${index}`;
                 team.name = `Đội Tái Cấu Trúc ${index + 1}`;
