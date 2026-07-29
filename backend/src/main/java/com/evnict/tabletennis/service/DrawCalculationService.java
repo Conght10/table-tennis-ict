@@ -152,12 +152,18 @@ public class DrawCalculationService {
             pots.add(new ArrayList<>(sortedPlayers.subList(teamCount * 2, Math.min(teamCount * 3, sortedPlayers.size()))));
         }
 
-        List<List<SeededCompetitor>> bestTeams = null;
         double bestScore = Double.POSITIVE_INFINITY;
+        List<List<List<SeededCompetitor>>> bestCandidates = new ArrayList<>();
 
         List<SeededCompetitor> pot0 = new ArrayList<>(pots.get(0));
-        List<List<SeededCompetitor>> pot1Variants = List.of(new ArrayList<>(pots.get(1)), reverseList(pots.get(1)));
-        List<List<SeededCompetitor>> pot2Variants = List.of(new ArrayList<>(pots.get(2)), reverseList(pots.get(2)));
+        Collections.shuffle(pot0);
+        List<SeededCompetitor> pot1Base = new ArrayList<>(pots.get(1));
+        Collections.shuffle(pot1Base);
+        List<SeededCompetitor> pot2Base = new ArrayList<>(pots.get(2));
+        Collections.shuffle(pot2Base);
+
+        List<List<SeededCompetitor>> pot1Variants = List.of(pot1Base, reverseList(pot1Base));
+        List<List<SeededCompetitor>> pot2Variants = List.of(pot2Base, reverseList(pot2Base));
 
         for (List<SeededCompetitor> p1 : pot1Variants) {
             for (List<SeededCompetitor> p2 : pot2Variants) {
@@ -173,25 +179,30 @@ public class DrawCalculationService {
                         }
 
                         double score = evaluateSeededTeams(candidateTeams, maxFemalePerTeam);
-                        if (score < bestScore) {
+                        if (score < bestScore - 0.001) {
                             bestScore = score;
-                            bestTeams = candidateTeams;
+                            bestCandidates = new ArrayList<>();
+                            bestCandidates.add(candidateTeams);
+                        } else if (Math.abs(score - bestScore) < 0.001) {
+                            bestCandidates.add(candidateTeams);
                         }
                     }
                 }
             }
         }
 
-        if (bestTeams == null) {
+        if (bestCandidates.isEmpty()) {
             return null;
         }
 
+        List<List<SeededCompetitor>> chosenTeams = bestCandidates.get(new Random().nextInt(bestCandidates.size()));
+
         List<Team> teams = new ArrayList<>();
-        for (int i = 0; i < bestTeams.size(); i++) {
+        for (int i = 0; i < chosenTeams.size(); i++) {
             Team team = new Team();
             team.id = "team-" + (i + 1);
             team.name = "Đội " + (i + 1);
-            team.players = bestTeams.get(i).stream()
+            team.players = chosenTeams.get(i).stream()
                 .map(p -> new Competitor(p.id, p.name))
                 .collect(Collectors.toList());
             teams.add(team);

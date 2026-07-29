@@ -82,13 +82,16 @@ export class TournamentEngineService {
             ];
         }
 
-        let bestTeams: SeededCompetitor[][] | null = null;
         let bestScore = Number.POSITIVE_INFINITY;
+        let bestCandidates: SeededCompetitor[][][] = [];
 
-        // Try multiple pot permutations (straight & reversed ordering, random shuffles) to find optimal team combinations
-        const pot0 = [...pots[0]];
-        const pot1Variants = [[...pots[1]], [...pots[1]].reverse()];
-        const pot2Variants = [[...pots[2]], [...pots[2]].reverse()];
+        // Shuffle within each pot among players with equal/close seeds for variety
+        const pot0 = this.shuffleNearEqualSeeds([...pots[0]]);
+        const pot1Base = this.shuffleNearEqualSeeds([...pots[1]]);
+        const pot2Base = this.shuffleNearEqualSeeds([...pots[2]]);
+
+        const pot1Variants = [pot1Base, [...pot1Base].reverse()];
+        const pot2Variants = [pot2Base, [...pot2Base].reverse()];
 
         for (const p1 of pot1Variants) {
             for (const p2 of pot2Variants) {
@@ -104,20 +107,25 @@ export class TournamentEngineService {
                         }
 
                         const score = this.evaluateSeededTeams(candidateTeams, maxFemalePerTeam);
-                        if (score < bestScore) {
+                        if (score < bestScore - 0.001) {
                             bestScore = score;
-                            bestTeams = candidateTeams;
+                            bestCandidates = [candidateTeams];
+                        } else if (Math.abs(score - bestScore) < 0.001) {
+                            bestCandidates.push(candidateTeams);
                         }
                     }
                 }
             }
         }
 
-        if (!bestTeams) {
+        if (bestCandidates.length === 0) {
             return null;
         }
 
-        return bestTeams.map((teamPlayers, index) => ({
+        // Randomly pick one optimal candidate among the tied best options for a true randomized draw
+        const chosenTeams = bestCandidates[Math.floor(Math.random() * bestCandidates.length)];
+
+        return chosenTeams.map((teamPlayers, index) => ({
             id: `team-${index + 1}`,
             name: teamPlayers[0]?.name ? `Đội ${teamPlayers[0].name}` : `Đội ${index + 1}`,
             players: teamPlayers.map((player) => ({ id: player.id, name: player.name }))
@@ -595,6 +603,16 @@ export class TournamentEngineService {
             copy[j] = current;
         }
 
+        return copy;
+    }
+
+    private shuffleNearEqualSeeds(pot: SeededCompetitor[]): SeededCompetitor[] {
+        const copy = [...pot];
+        // Shuffle elements randomly within the same pot for draw variation
+        for (let i = copy.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [copy[i], copy[j]] = [copy[j], copy[i]];
+        }
         return copy;
     }
 }
