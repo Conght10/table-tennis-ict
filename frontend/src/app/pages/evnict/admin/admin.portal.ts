@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CdkDragDrop, moveItemInArray, DragDropModule } from '@angular/cdk/drag-drop';
 import { FormsModule } from '@angular/forms';
 import { ChartModule } from 'primeng/chart';
@@ -2290,7 +2290,7 @@ import { Router, ActivatedRoute } from '@angular/router';
                 <div class="space-y-1.5 px-4">
                     <div class="flex justify-between text-[11px] font-bold text-slate-600 dark:text-slate-350">
                         <span>Tiến độ: {{ drawProgressPercent }}%</span>
-                        <span>{{ 90 - drawProgressSeconds }} giây còn lại</span>
+                        <span>{{ drawTotalSeconds - drawProgressSeconds }} giây còn lại</span>
                     </div>
                     <div class="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
                         <div class="h-full bg-gradient-to-r from-primary to-sky-500 rounded-full transition-all duration-1000" [style.width.%]="drawProgressPercent"></div>
@@ -2303,7 +2303,7 @@ import { Router, ActivatedRoute } from '@angular/router';
                         <div class="space-y-1">
                             <span class="block text-slate-400">Trạng thái:</span>
                             <span class="font-bold text-slate-800 dark:text-slate-200">
-                                {{ drawProgressSeconds < 30 ? 'XÁO TRỘN TẬP HỢP' : 'TÌM PHƯƠNG ÁN TỐI ƯU' }}
+                                {{ drawProgressSeconds < drawPhase1Duration ? 'XÁO TRỘN TẬP HỢP' : 'TÌM PHƯƠNG ÁN TỐI ƯU' }}
                             </span>
                         </div>
                         <div class="space-y-1">
@@ -2313,13 +2313,13 @@ import { Router, ActivatedRoute } from '@angular/router';
                         <div class="space-y-1">
                             <span class="block text-slate-400">Độ lệch chuẩn (&sigma;):</span>
                             <span class="font-bold text-slate-700 dark:text-slate-300">
-                                {{ drawProgressSeconds < 30 ? '---' : drawFakeStdDev.toFixed(4) }}
+                                {{ drawProgressSeconds < drawPhase1Duration ? '---' : drawFakeStdDev.toFixed(4) }}
                             </span>
                         </div>
                         <div class="space-y-1">
                             <span class="block text-slate-400">Chênh lệch điểm tối đa:</span>
                             <span class="font-bold text-slate-700 dark:text-slate-300">
-                                {{ drawProgressSeconds < 30 ? '---' : (drawFakeMaxDiff + ' điểm') }}
+                                {{ drawProgressSeconds < drawPhase1Duration ? '---' : (drawFakeMaxDiff + ' điểm') }}
                             </span>
                         </div>
                     </div>
@@ -2465,6 +2465,8 @@ export class AdminPortal implements OnInit {
     showDrawSimulationProgress = false;
     drawProgressSeconds = 0;
     drawProgressPercent = 0;
+    drawTotalSeconds = 90;
+    drawPhase1Duration = 30;
     drawProgressMessage = '';
     drawProgressSubMessage = '';
     drawFakeTrials = 0;
@@ -3053,7 +3055,8 @@ export class AdminPortal implements OnInit {
     constructor(
         private readonly dataService: EvnictDataService,
         private readonly router: Router,
-        private readonly route: ActivatedRoute
+        private readonly route: ActivatedRoute,
+        private readonly cdr: ChangeDetectorRef
     ) {}
 
     ngOnInit(): void {
@@ -3487,71 +3490,104 @@ export class AdminPortal implements OnInit {
     }
 
     runDrawSimulation(type: 'generateTeams' | 'drawGroups', onComplete: () => void): void {
-        this.showDrawSimulationProgress = true;
-        this.drawProgressSeconds = 0;
-        this.drawProgressPercent = 0;
-        this.drawProgressMessage = 'Hệ thống đang xáo trộn các tập hợp trước khi thực hiện bốc ngẫu nhiên.';
-        this.drawProgressSubMessage = 'Đang chuẩn bị danh sách...';
-        this.drawFakeTrials = 0;
-        this.drawFakeStdDev = 4.2;
-        this.drawFakeMaxDiff = 8;
+        try {
+            this.showDrawSimulationProgress = true;
+            this.drawProgressSeconds = 0;
+            this.drawProgressPercent = 0;
+            this.drawTotalSeconds = Math.floor(Math.random() * 46) + 20; // random 20s to 65s (<= 90s)
+            this.drawPhase1Duration = Math.max(6, Math.floor(this.drawTotalSeconds * 0.33));
 
-        if (this.drawTimerInterval) clearInterval(this.drawTimerInterval);
-        if (this.drawFakeDataInterval) clearInterval(this.drawFakeDataInterval);
+            this.drawProgressMessage = 'Hệ thống đang xáo trộn các tập hợp trước khi thực hiện bốc ngẫu nhiên.';
+            this.drawProgressSubMessage = 'Đang chuẩn bị danh sách...';
+            this.drawFakeTrials = 0;
+            this.drawFakeStdDev = 4.2;
+            this.drawFakeMaxDiff = 8;
 
-        // Fetch participants for custom swapping animation text
-        const participants = this.currTournament?.participants || [];
-        const memberNames = participants.map(pid => this.memberName(pid)).filter(n => !!n);
+            if (this.drawTimerInterval) clearInterval(this.drawTimerInterval);
+            if (this.drawFakeDataInterval) clearInterval(this.drawFakeDataInterval);
 
-        // 1s timer tick
-        this.drawTimerInterval = setInterval(() => {
-            this.drawProgressSeconds++;
-            this.drawProgressPercent = Math.min(100, Math.floor((this.drawProgressSeconds / 90) * 100));
-
-            if (this.drawProgressSeconds === 30) {
-                this.drawProgressMessage = 'Hệ thống đang thực hiện bốc ngẫu nhiên các đội và tính toán tổng điểm cho đến khi đạt điều kiện đảm bảo sự cân bằng tương đối';
-            }
-
-            if (this.drawProgressSeconds >= 90) {
-                clearInterval(this.drawTimerInterval);
-                clearInterval(this.drawFakeDataInterval);
-                this.showDrawSimulationProgress = false;
-                onComplete();
-            }
-        }, 1000);
-
-        // 100ms fake stats updates
-        this.drawFakeDataInterval = setInterval(() => {
-            if (this.drawProgressSeconds < 30) {
-                // Phase 1: Shuffling
-                this.drawFakeTrials += Math.floor(Math.random() * 5) + 3;
-                if (memberNames.length >= 2) {
-                    const idx1 = Math.floor(Math.random() * memberNames.length);
-                    let idx2 = Math.floor(Math.random() * memberNames.length);
-                    while (idx1 === idx2) {
-                        idx2 = Math.floor(Math.random() * memberNames.length);
-                    }
-                    this.drawProgressSubMessage = `Đang hoán đổi vị trí: ${memberNames[idx1]} ⇄ ${memberNames[idx2]}`;
-                } else {
-                    this.drawProgressSubMessage = `Đang xáo trộn tập hợp hạt giống...`;
+            // Fetch participants safely using both registrations (if seeded) or participants list
+            let participantIds: string[] = [];
+            if (this.currTournament) {
+                if (this.currTournament.registrations?.length) {
+                    participantIds = this.currTournament.registrations.map(r => r.memberId);
+                } else if (this.currTournament.participants?.length) {
+                    participantIds = this.currTournament.participants;
                 }
-            } else {
-                // Phase 2: Active trials & convergence
-                this.drawFakeTrials += Math.floor(Math.random() * 4000) + 2500;
-                
-                const ratio = (this.drawProgressSeconds - 30) / 60; // 0 to 1
-                const targetStdDev = 1.1; // Converging towards 1.1
-                const currentBaseStdDev = 3.8 - ratio * 2.7; // Decreasing from 3.8 to 1.1
-                const noise = (Math.random() - 0.5) * 0.1;
-                this.drawFakeStdDev = Math.max(1.0, currentBaseStdDev + noise);
-
-                const currentBaseMaxDiff = Math.round(9 - ratio * 7); // Decreasing from 9 to 2
-                const diffNoise = Math.floor((Math.random() - 0.5) * 2);
-                this.drawFakeMaxDiff = Math.max(1, Math.min(12, currentBaseMaxDiff + diffNoise));
-
-                this.drawProgressSubMessage = `Đang chạy thử phương án thứ ${this.drawFakeTrials.toLocaleString()}...`;
             }
-        }, 100);
+
+            const memberNames = participantIds.map(pid => this.memberName(pid)).filter(n => !!n);
+
+            // 1s timer tick
+            this.drawTimerInterval = setInterval(() => {
+                try {
+                    this.drawProgressSeconds++;
+                    this.drawProgressPercent = Math.min(100, Math.floor((this.drawProgressSeconds / this.drawTotalSeconds) * 100));
+
+                    if (this.drawProgressSeconds === this.drawPhase1Duration) {
+                        this.drawProgressMessage = 'Hệ thống đang thực hiện bốc ngẫu nhiên các đội và tính toán tổng điểm cho đến khi đạt điều kiện đảm bảo sự cân bằng tương đối';
+                    }
+
+                    if (this.drawProgressSeconds >= this.drawTotalSeconds) {
+                        clearInterval(this.drawTimerInterval);
+                        clearInterval(this.drawFakeDataInterval);
+                        this.showDrawSimulationProgress = false;
+                        onComplete();
+                    }
+                    this.cdr.detectChanges();
+                } catch (err: any) {
+                    console.error("Timer error:", err);
+                    this.drawProgressSubMessage = "Timer error: " + err.message;
+                    this.cdr.detectChanges();
+                }
+            }, 1000);
+
+            // 100ms fake stats updates
+            this.drawFakeDataInterval = setInterval(() => {
+                try {
+                    if (this.drawProgressSeconds < this.drawPhase1Duration) {
+                        // Phase 1: Shuffling
+                        this.drawFakeTrials += Math.floor(Math.random() * 5) + 3;
+                        if (memberNames.length >= 2) {
+                            const idx1 = Math.floor(Math.random() * memberNames.length);
+                            let idx2 = Math.floor(Math.random() * memberNames.length);
+                            while (idx1 === idx2) {
+                                idx2 = Math.floor(Math.random() * memberNames.length);
+                            }
+                            this.drawProgressSubMessage = `Đang hoán đổi vị trí: ${memberNames[idx1]} ⇄ ${memberNames[idx2]}`;
+                        } else {
+                            this.drawProgressSubMessage = `Đang xáo trộn tập hợp hạt giống...`;
+                        }
+                    } else {
+                        // Phase 2: Active trials & convergence
+                        this.drawFakeTrials += Math.floor(Math.random() * 4000) + 2500;
+                        
+                        const phase2Duration = this.drawTotalSeconds - this.drawPhase1Duration;
+                        const ratio = (this.drawProgressSeconds - this.drawPhase1Duration) / phase2Duration; // 0 to 1
+                        const targetStdDev = 1.1; // Converging towards 1.1
+                        const currentBaseStdDev = 3.8 - ratio * 2.7; // Decreasing from 3.8 to 1.1
+                        const noise = (Math.random() - 0.5) * 0.1;
+                        this.drawFakeStdDev = Math.max(1.0, currentBaseStdDev + noise);
+
+                        const currentBaseMaxDiff = Math.round(9 - ratio * 7); // Decreasing from 9 to 2
+                        const diffNoise = Math.floor((Math.random() - 0.5) * 2);
+                        this.drawFakeMaxDiff = Math.max(1, Math.min(12, currentBaseMaxDiff + diffNoise));
+
+                        this.drawProgressSubMessage = `Đang chạy thử phương án thứ ${this.drawFakeTrials.toLocaleString()}...`;
+                    }
+                    this.cdr.detectChanges();
+                } catch (err: any) {
+                    console.error("Data updates error:", err);
+                    this.drawProgressSubMessage = "Data error: " + err.message;
+                    this.cdr.detectChanges();
+                }
+            }, 100);
+
+            this.cdr.detectChanges();
+        } catch (globalErr: any) {
+            console.error("Global simulation error:", globalErr);
+            alert("Error starting draw simulation: " + globalErr.message);
+        }
     }
 
     drawTournament(tid: string): void {
