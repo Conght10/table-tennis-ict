@@ -2253,8 +2253,103 @@ import { Router, ActivatedRoute } from '@angular/router';
                 </div>
             </div>
         </p-dialog>
+
+        <!-- Dialog Bốc thăm / Chia đội giả lập chạy 90s -->
+        <p-dialog [(visible)]="showDrawSimulationProgress" [closable]="false" [modal]="true" [style]="{ width: '550px' }" [draggable]="false" [resizable]="false" [appendTo]="'body'">
+            <ng-template pTemplate="header">
+                <div class="flex items-center gap-2 text-primary font-bold text-lg">
+                    <i class="pi pi-cog pi-spin text-xl"></i>
+                    <span>TIẾN TRÌNH BỐC THĂM VÀ TÍNH TOÁN TỐI ƯU</span>
+                </div>
+            </ng-template>
+            <div class="space-y-6 py-4 text-xs">
+                <!-- Cool visual icon animation -->
+                <div class="flex justify-center py-4">
+                    <div class="relative w-24 h-24 flex items-center justify-center">
+                        <!-- Rotating outer circles -->
+                        <div class="absolute inset-0 border-4 border-dashed border-primary/30 rounded-full animate-custom-spin"></div>
+                        <div class="absolute inset-2 border-4 border-dashed border-sky-400/40 rounded-full animate-custom-spin-reverse"></div>
+                        <!-- Inner pulse icon -->
+                        <div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center animate-custom-pulse">
+                            <i class="pi pi-chart-line text-primary text-3xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress text messages -->
+                <div class="space-y-2 text-center">
+                    <div class="font-bold text-slate-800 dark:text-slate-100 text-sm min-h-[40px] px-4 leading-relaxed">
+                        {{ drawProgressMessage }}
+                    </div>
+                    <div class="text-slate-500 dark:text-slate-400 font-mono text-[11px] min-h-[20px]">
+                        {{ drawProgressSubMessage }}
+                    </div>
+                </div>
+
+                <!-- Custom styled progress bar -->
+                <div class="space-y-1.5 px-4">
+                    <div class="flex justify-between text-[11px] font-bold text-slate-600 dark:text-slate-350">
+                        <span>Tiến độ: {{ drawProgressPercent }}%</span>
+                        <span>{{ 90 - drawProgressSeconds }} giây còn lại</span>
+                    </div>
+                    <div class="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
+                        <div class="h-full bg-gradient-to-r from-primary to-sky-500 rounded-full transition-all duration-1000" [style.width.%]="drawProgressPercent"></div>
+                    </div>
+                </div>
+
+                <!-- Live stats box -->
+                <div class="mx-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 font-mono">
+                    <div class="grid grid-cols-2 gap-4 text-[11px] text-slate-600 dark:text-slate-350">
+                        <div class="space-y-1">
+                            <span class="block text-slate-400">Trạng thái:</span>
+                            <span class="font-bold text-slate-800 dark:text-slate-200">
+                                {{ drawProgressSeconds < 30 ? 'XÁO TRỘN TẬP HỢP' : 'TÌM PHƯƠNG ÁN TỐI ƯU' }}
+                            </span>
+                        </div>
+                        <div class="space-y-1">
+                            <span class="block text-slate-400">Tổng số mẫu thử:</span>
+                            <span class="font-bold text-primary">{{ drawFakeTrials | number }}</span>
+                        </div>
+                        <div class="space-y-1">
+                            <span class="block text-slate-400">Độ lệch chuẩn (&sigma;):</span>
+                            <span class="font-bold text-slate-700 dark:text-slate-300">
+                                {{ drawProgressSeconds < 30 ? '---' : drawFakeStdDev.toFixed(4) }}
+                            </span>
+                        </div>
+                        <div class="space-y-1">
+                            <span class="block text-slate-400">Chênh lệch điểm tối đa:</span>
+                            <span class="font-bold text-slate-700 dark:text-slate-300">
+                                {{ drawProgressSeconds < 30 ? '---' : (drawFakeMaxDiff + ' điểm') }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </p-dialog>
     `,
     styles: [`
+        @keyframes custom-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @keyframes custom-spin-reverse {
+            from { transform: rotate(360deg); }
+            to { transform: rotate(0deg); }
+        }
+        @keyframes custom-pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
+        .animate-custom-spin {
+            animation: custom-spin 20s linear infinite;
+        }
+        .animate-custom-spin-reverse {
+            animation: custom-spin-reverse 10s linear infinite;
+        }
+        .animate-custom-pulse {
+            animation: custom-pulse 2s ease-in-out infinite;
+        }
+
         :host {
             display: block;
         }
@@ -2365,6 +2460,18 @@ import { Router, ActivatedRoute } from '@angular/router';
 })
 export class AdminPortal implements OnInit {
     activeTab = 'members';
+
+    // Drawing simulation progress dialog state variables
+    showDrawSimulationProgress = false;
+    drawProgressSeconds = 0;
+    drawProgressPercent = 0;
+    drawProgressMessage = '';
+    drawProgressSubMessage = '';
+    drawFakeTrials = 0;
+    drawFakeStdDev = 4.2;
+    drawFakeMaxDiff = 8;
+    private drawTimerInterval: any = null;
+    private drawFakeDataInterval: any = null;
     tabs = [
         { id: 'members', label: 'Thành Viên', icon: 'pi pi-users' },
         { id: 'matches', label: 'Kết Quả & Tranh Chấp', icon: 'pi pi-check-circle' },
@@ -3379,11 +3486,81 @@ export class AdminPortal implements OnInit {
         this.tournamentViewMode = 'list';
     }
 
+    runDrawSimulation(type: 'generateTeams' | 'drawGroups', onComplete: () => void): void {
+        this.showDrawSimulationProgress = true;
+        this.drawProgressSeconds = 0;
+        this.drawProgressPercent = 0;
+        this.drawProgressMessage = 'Hệ thống đang xáo trộn các tập hợp trước khi thực hiện bốc ngẫu nhiên.';
+        this.drawProgressSubMessage = 'Đang chuẩn bị danh sách...';
+        this.drawFakeTrials = 0;
+        this.drawFakeStdDev = 4.2;
+        this.drawFakeMaxDiff = 8;
+
+        if (this.drawTimerInterval) clearInterval(this.drawTimerInterval);
+        if (this.drawFakeDataInterval) clearInterval(this.drawFakeDataInterval);
+
+        // Fetch participants for custom swapping animation text
+        const participants = this.currTournament?.participants || [];
+        const memberNames = participants.map(pid => this.memberName(pid)).filter(n => !!n);
+
+        // 1s timer tick
+        this.drawTimerInterval = setInterval(() => {
+            this.drawProgressSeconds++;
+            this.drawProgressPercent = Math.min(100, Math.floor((this.drawProgressSeconds / 90) * 100));
+
+            if (this.drawProgressSeconds === 30) {
+                this.drawProgressMessage = 'Hệ thống đang thực hiện bốc ngẫu nhiên các đội và tính toán tổng điểm cho đến khi đạt điều kiện đảm bảo sự cân bằng tương đối';
+            }
+
+            if (this.drawProgressSeconds >= 90) {
+                clearInterval(this.drawTimerInterval);
+                clearInterval(this.drawFakeDataInterval);
+                this.showDrawSimulationProgress = false;
+                onComplete();
+            }
+        }, 1000);
+
+        // 100ms fake stats updates
+        this.drawFakeDataInterval = setInterval(() => {
+            if (this.drawProgressSeconds < 30) {
+                // Phase 1: Shuffling
+                this.drawFakeTrials += Math.floor(Math.random() * 5) + 3;
+                if (memberNames.length >= 2) {
+                    const idx1 = Math.floor(Math.random() * memberNames.length);
+                    let idx2 = Math.floor(Math.random() * memberNames.length);
+                    while (idx1 === idx2) {
+                        idx2 = Math.floor(Math.random() * memberNames.length);
+                    }
+                    this.drawProgressSubMessage = `Đang hoán đổi vị trí: ${memberNames[idx1]} ⇄ ${memberNames[idx2]}`;
+                } else {
+                    this.drawProgressSubMessage = `Đang xáo trộn tập hợp hạt giống...`;
+                }
+            } else {
+                // Phase 2: Active trials & convergence
+                this.drawFakeTrials += Math.floor(Math.random() * 4000) + 2500;
+                
+                const ratio = (this.drawProgressSeconds - 30) / 60; // 0 to 1
+                const targetStdDev = 1.1; // Converging towards 1.1
+                const currentBaseStdDev = 3.8 - ratio * 2.7; // Decreasing from 3.8 to 1.1
+                const noise = (Math.random() - 0.5) * 0.1;
+                this.drawFakeStdDev = Math.max(1.0, currentBaseStdDev + noise);
+
+                const currentBaseMaxDiff = Math.round(9 - ratio * 7); // Decreasing from 9 to 2
+                const diffNoise = Math.floor((Math.random() - 0.5) * 2);
+                this.drawFakeMaxDiff = Math.max(1, Math.min(12, currentBaseMaxDiff + diffNoise));
+
+                this.drawProgressSubMessage = `Đang chạy thử phương án thứ ${this.drawFakeTrials.toLocaleString()}...`;
+            }
+        }, 100);
+    }
+
     drawTournament(tid: string): void {
-        this.dataService.drawTournament(tid);
-        this.reloadAll();
-        const updated = this.allTournaments.find((x: any) => x.id === tid);
-        this.currTournament = updated ? { ...updated } : null;
+        this.runDrawSimulation('drawGroups', () => {
+            this.dataService.drawTournament(tid);
+            this.reloadAll();
+            const updated = this.allTournaments.find((x: any) => x.id === tid);
+            this.currTournament = updated ? { ...updated } : null;
+        });
     }
 
     resetTournamentDraw(tid: string): void {
@@ -3650,10 +3827,13 @@ export class AdminPortal implements OnInit {
 
     generateTeams(): void {
         if (this.currTournament) {
-            this.dataService.generateTeamsForTournament(this.currTournament.id);
-            this.reloadAll();
-            const updated = this.allTournaments.find((x: any) => x.id === this.currTournament!.id);
-            this.currTournament = updated ? { ...updated } : null;
+            const tid = this.currTournament.id;
+            this.runDrawSimulation('generateTeams', () => {
+                this.dataService.generateTeamsForTournament(tid);
+                this.reloadAll();
+                const updated = this.allTournaments.find((x: any) => x.id === tid);
+                this.currTournament = updated ? { ...updated } : null;
+            });
         }
     }
 

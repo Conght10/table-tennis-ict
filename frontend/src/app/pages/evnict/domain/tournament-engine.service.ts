@@ -93,17 +93,13 @@ export class TournamentEngineService {
         const isFem = (p: SeededCompetitor) => this.isFemale(p.gender);
 
         let bestScore = Number.POSITIVE_INFINITY;
+        let bestCandidate: { teamGroups: SeededCompetitor[][]; score: number } | null = null;
         const allCandidates: Array<{ teamGroups: SeededCompetitor[][]; score: number }> = [];
 
         // Monte Carlo: Run iterations dynamically depending on N
-        let ITERATIONS = 50000;
-        if (N <= 5) {
-            ITERATIONS = 20000;
-        } else if (N === 6) {
-            ITERATIONS = 100000;
-        } else if (N >= 7) {
-            ITERATIONS = 200000;
-        }
+        let ITERATIONS = 500000;
+        let foundIdeal = false;
+
         for (let iter = 0; iter < ITERATIONS; iter++) {
             const p1 = this.shuffle([...pot1]);
             const p2 = this.shuffle([...pot2]);
@@ -130,53 +126,70 @@ export class TournamentEngineService {
             const minTotal = Math.min(...totals);
             const mean = totals.reduce((sum, total) => sum + total, 0) / totals.length;
             const variance = totals.reduce((sum, total) => sum + Math.pow(total - mean, 2), 0) / totals.length;
+            const stdDev = Math.sqrt(variance);
 
             const score = femaleViolation * 1000000 + (maxTotal - minTotal) * 1000 + variance;
 
+            const candidate = { teamGroups, score };
             if (score < bestScore) {
                 bestScore = score;
+                bestCandidate = candidate;
             }
 
-            allCandidates.push({ teamGroups, score });
+            // Stop condition: femaleViolation === 0 AND stdDev between 1.0 and 1.2 AND maxTotal - minTotal <= 3
+            if (femaleViolation === 0 && stdDev >= 1.0 && stdDev <= 1.2 && (maxTotal - minTotal) <= 3) {
+                bestCandidate = candidate;
+                allCandidates.push(candidate);
+                foundIdeal = true;
+                break;
+            }
+
+            allCandidates.push(candidate);
         }
 
         if (allCandidates.length === 0) return null;
 
-        // Accept all candidates within 3 seed-spread of optimal (tolerance for variety)
-        // Score formula: femViolation*1M + (maxSpread)*1K + variance
-        // 3 seed-spread tolerance = 3000 score points
-        const SPREAD_TOLERANCE = 3_000;
-        const candidates = allCandidates.filter((c) => c.score <= bestScore + SPREAD_TOLERANCE);
+        let chosen: typeof allCandidates[0];
 
-        if (candidates.length === 0) return null;
+        if (foundIdeal && bestCandidate) {
+            chosen = bestCandidate;
+        } else {
+            // Accept all candidates within 3 seed-spread of optimal (tolerance for variety)
+            // Score formula: femViolation*1M + (maxSpread)*1K + variance
+            // 3 seed-spread tolerance = 3000 score points
+            const SPREAD_TOLERANCE = 3_000;
+            const candidates = allCandidates.filter((c) => c.score <= bestScore + SPREAD_TOLERANCE);
 
-        // De-duplicate candidate configurations (set of 7 teams) to avoid duplicates
-        const uniqueConfigs = new Map<string, typeof candidates[0]>();
-        for (const c of candidates) {
-            const teamKeys = c.teamGroups.map(team => 
-                team.map(p => p.id).sort().join(',')
-            ).sort().join('|');
-            if (!uniqueConfigs.has(teamKeys)) {
-                uniqueConfigs.set(teamKeys, c);
+            if (candidates.length === 0) return null;
+
+            // De-duplicate candidate configurations (set of 7 teams) to avoid duplicates
+            const uniqueConfigs = new Map<string, typeof candidates[0]>();
+            for (const c of candidates) {
+                const teamKeys = c.teamGroups.map(team => 
+                    team.map(p => p.id).sort().join(',')
+                ).sort().join('|');
+                if (!uniqueConfigs.has(teamKeys)) {
+                    uniqueConfigs.set(teamKeys, c);
+                }
             }
-        }
-        const uniqueList = Array.from(uniqueConfigs.values());
+            const uniqueList = Array.from(uniqueConfigs.values());
 
-        // Exclude the last selected team composition for the first captain (pot0[0]) if there are other unique options
-        let filteredList = uniqueList;
-        if (this.lastSelectedCaptainTeamKey && uniqueList.length > 1) {
-            const temp = uniqueList.filter(c => {
-                const captainTeam = c.teamGroups[0];
-                const key = captainTeam.map(p => p.id).sort().join(',');
-                return key !== this.lastSelectedCaptainTeamKey;
-            });
-            if (temp.length > 0) {
-                filteredList = temp;
+            // Exclude the last selected team composition for the first captain (pot0[0]) if there are other unique options
+            let filteredList = uniqueList;
+            if (this.lastSelectedCaptainTeamKey && uniqueList.length > 1) {
+                const temp = uniqueList.filter(c => {
+                    const captainTeam = c.teamGroups[0];
+                    const key = captainTeam.map(p => p.id).sort().join(',');
+                    return key !== this.lastSelectedCaptainTeamKey;
+                });
+                if (temp.length > 0) {
+                    filteredList = temp;
+                }
             }
-        }
 
-        // Randomly pick one unique configuration
-        const chosen = filteredList[Math.floor(Math.random() * filteredList.length)];
+            // Randomly pick one unique configuration
+            chosen = filteredList[Math.floor(Math.random() * filteredList.length)];
+        }
         
         // Save the selected team composition for the next draw
         const chosenCaptainTeam = chosen.teamGroups[0];

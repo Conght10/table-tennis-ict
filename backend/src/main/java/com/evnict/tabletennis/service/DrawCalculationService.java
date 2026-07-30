@@ -141,7 +141,8 @@ public class DrawCalculationService {
         }
 
         int teamCount = pots.get(0).size();
-        boolean validRanges = teamCount > 0 && pots.stream().allMatch(p -> p.size() == teamCount);
+        final int finalTeamCount = teamCount;
+        boolean validRanges = teamCount > 0 && pots.stream().allMatch(p -> p.size() == finalTeamCount);
 
         if (!validRanges) {
             teamCount = sortedPlayers.size() / teamSize;
@@ -154,49 +155,74 @@ public class DrawCalculationService {
         }
 
         double bestScore = Double.POSITIVE_INFINITY;
-        List<List<List<SeededCompetitor>>> bestCandidates = new ArrayList<>();
+        List<List<SeededCompetitor>> bestCandidateTeams = null;
 
         List<SeededCompetitor> pot0 = new ArrayList<>(pots.get(0));
-        Collections.shuffle(pot0);
-        List<SeededCompetitor> pot1Base = new ArrayList<>(pots.get(1));
-        Collections.shuffle(pot1Base);
-        List<SeededCompetitor> pot2Base = new ArrayList<>(pots.get(2));
-        Collections.shuffle(pot2Base);
+        List<SeededCompetitor> pot1 = new ArrayList<>(pots.get(1));
+        List<SeededCompetitor> pot2 = new ArrayList<>(pots.get(2));
 
-        List<List<SeededCompetitor>> pot1Variants = List.of(pot1Base, reverseList(pot1Base));
-        List<List<SeededCompetitor>> pot2Variants = List.of(pot2Base, reverseList(pot2Base));
+        int maxIterations = 200000;
+        Random rand = new Random();
 
-        for (List<SeededCompetitor> p1 : pot1Variants) {
-            for (List<SeededCompetitor> p2 : pot2Variants) {
-                for (int middleShift = 0; middleShift < teamCount; middleShift++) {
-                    for (int weakShift = 0; weakShift < teamCount; weakShift++) {
-                        List<List<SeededCompetitor>> candidateTeams = new ArrayList<>();
-                        for (int i = 0; i < teamCount; i++) {
-                            List<SeededCompetitor> teamPlayers = new ArrayList<>();
-                            teamPlayers.add(pot0.get(i));
-                            teamPlayers.add(p1.get((i + middleShift) % teamCount));
-                            teamPlayers.add(p2.get((i + weakShift) % teamCount));
-                            candidateTeams.add(teamPlayers);
-                        }
+        for (int iter = 0; iter < maxIterations; iter++) {
+            List<SeededCompetitor> p1 = new ArrayList<>(pot1);
+            Collections.shuffle(p1, rand);
+            List<SeededCompetitor> p2 = new ArrayList<>(pot2);
+            Collections.shuffle(p2, rand);
 
-                        double score = evaluateSeededTeams(candidateTeams, maxFemalePerTeam);
-                        if (score < bestScore - 0.001) {
-                            bestScore = score;
-                            bestCandidates = new ArrayList<>();
-                            bestCandidates.add(candidateTeams);
-                        } else if (Math.abs(score - bestScore) < 0.001) {
-                            bestCandidates.add(candidateTeams);
-                        }
+            List<List<SeededCompetitor>> candidateTeams = new ArrayList<>();
+            for (int i = 0; i < teamCount; i++) {
+                List<SeededCompetitor> teamPlayers = new ArrayList<>();
+                teamPlayers.add(pot0.get(i));
+                teamPlayers.add(p1.get(i));
+                teamPlayers.add(p2.get(i));
+                candidateTeams.add(teamPlayers);
+            }
+
+            // Calculate stats
+            List<Integer> totals = new ArrayList<>();
+            int femaleViolations = 0;
+            for (List<SeededCompetitor> team : candidateTeams) {
+                int sum = 0;
+                int femaleCount = 0;
+                for (SeededCompetitor player : team) {
+                    sum += (player.seed != null ? player.seed : 0);
+                    if (isFemale(player.gender)) {
+                        femaleCount++;
                     }
                 }
+                totals.add(sum);
+                if (femaleCount > maxFemalePerTeam) {
+                    femaleViolations += (femaleCount - maxFemalePerTeam);
+                }
+            }
+
+            int maxTotal = Collections.max(totals);
+            int minTotal = Collections.min(totals);
+            int seedSpread = maxTotal - minTotal;
+            double mean = totals.stream().mapToInt(Integer::intValue).average().orElse(0.0);
+            double variance = totals.stream().mapToDouble(total -> Math.pow(total - mean, 2)).average().orElse(0.0);
+            double stdDev = Math.sqrt(variance);
+
+            double score = femaleViolations * 1000000.0 + seedSpread * 1000.0 + variance;
+
+            if (score < bestScore) {
+                bestScore = score;
+                bestCandidateTeams = candidateTeams;
+            }
+
+            // Stop condition: femaleViolations == 0 AND stdDev between 1.0 and 1.2 AND seedSpread <= 3
+            if (femaleViolations == 0 && stdDev >= 1.0 && stdDev <= 1.2 && seedSpread <= 3) {
+                bestCandidateTeams = candidateTeams;
+                break;
             }
         }
 
-        if (bestCandidates.isEmpty()) {
+        if (bestCandidateTeams == null) {
             return null;
         }
 
-        List<List<SeededCompetitor>> chosenTeams = bestCandidates.get(new Random().nextInt(bestCandidates.size()));
+        List<List<SeededCompetitor>> chosenTeams = bestCandidateTeams;
 
         List<Team> teams = new ArrayList<>();
         for (int i = 0; i < chosenTeams.size(); i++) {
@@ -520,7 +546,8 @@ public class DrawCalculationService {
         }
 
         int teamCount = pots.get(0).size();
-        boolean validRanges = teamCount > 0 && pots.stream().allMatch(p -> p.size() == teamCount);
+        final int finalTeamCount = teamCount;
+        boolean validRanges = teamCount > 0 && pots.stream().allMatch(p -> p.size() == finalTeamCount);
 
         if (!validRanges) {
             teamCount = sortedPlayers.size() / teamSize;
@@ -535,70 +562,85 @@ public class DrawCalculationService {
         List<DrawCandidate> candidates = new ArrayList<>();
 
         List<SeededCompetitor> pot0 = new ArrayList<>(pots.get(0));
-        List<List<SeededCompetitor>> pot1Variants = List.of(new ArrayList<>(pots.get(1)), reverseList(pots.get(1)));
-        List<List<SeededCompetitor>> pot2Variants = List.of(new ArrayList<>(pots.get(2)), reverseList(pots.get(2)));
+        List<SeededCompetitor> pot1 = new ArrayList<>(pots.get(1));
+        List<SeededCompetitor> pot2 = new ArrayList<>(pots.get(2));
 
-        int varIdx = 0;
-        for (int v1 = 0; v1 < pot1Variants.size(); v1++) {
-            List<SeededCompetitor> p1 = pot1Variants.get(v1);
-            for (int v2 = 0; v2 < pot2Variants.size(); v2++) {
-                List<SeededCompetitor> p2 = pot2Variants.get(v2);
-                for (int middleShift = 0; middleShift < teamCount; middleShift++) {
-                    for (int weakShift = 0; weakShift < teamCount; weakShift++) {
-                        List<List<SeededCompetitor>> candidateTeams = new ArrayList<>();
-                        for (int i = 0; i < teamCount; i++) {
-                            List<SeededCompetitor> teamPlayers = new ArrayList<>();
-                            teamPlayers.add(pot0.get(i));
-                            teamPlayers.add(p1.get((i + middleShift) % teamCount));
-                            teamPlayers.add(p2.get((i + weakShift) % teamCount));
-                            candidateTeams.add(teamPlayers);
-                        }
+        int maxIterations = 50000;
+        Random rand = new Random();
+        Set<String> seenConfigs = new HashSet<>();
 
-                List<Integer> totals = new ArrayList<>();
-                int femaleViolations = 0;
-                for (List<SeededCompetitor> team : candidateTeams) {
-                    int sum = 0;
-                    int femaleCount = 0;
-                    for (SeededCompetitor p : team) {
-                        sum += p.seed;
-                        if (isFemale(p.gender)) {
-                            femaleCount++;
-                        }
-                    }
-                    totals.add(sum);
-                    if (femaleCount > maxFemalePerTeam) {
-                        femaleViolations += (femaleCount - maxFemalePerTeam);
+        for (int iter = 0; iter < maxIterations; iter++) {
+            List<SeededCompetitor> p1 = new ArrayList<>(pot1);
+            Collections.shuffle(p1, rand);
+            List<SeededCompetitor> p2 = new ArrayList<>(pot2);
+            Collections.shuffle(p2, rand);
+
+            // Build seen key
+            List<String> teamKeys = new ArrayList<>();
+            for (int i = 0; i < teamCount; i++) {
+                List<String> ids = Arrays.asList(pot0.get(i).id, p1.get(i).id, p2.get(i).id);
+                Collections.sort(ids);
+                teamKeys.add(String.join(",", ids));
+            }
+            Collections.sort(teamKeys);
+            String configKey = String.join("|", teamKeys);
+
+            if (seenConfigs.contains(configKey)) {
+                continue;
+            }
+            seenConfigs.add(configKey);
+
+            List<List<SeededCompetitor>> candidateTeams = new ArrayList<>();
+            for (int i = 0; i < teamCount; i++) {
+                List<SeededCompetitor> teamPlayers = new ArrayList<>();
+                teamPlayers.add(pot0.get(i));
+                teamPlayers.add(p1.get(i));
+                teamPlayers.add(p2.get(i));
+                candidateTeams.add(teamPlayers);
+            }
+
+            List<Integer> totals = new ArrayList<>();
+            int femaleViolations = 0;
+            for (List<SeededCompetitor> team : candidateTeams) {
+                int sum = 0;
+                int femaleCount = 0;
+                for (SeededCompetitor p : team) {
+                    sum += (p.seed != null ? p.seed : 0);
+                    if (isFemale(p.gender)) {
+                        femaleCount++;
                     }
                 }
-                int maxTotal = Collections.max(totals);
-                int minTotal = Collections.min(totals);
-                int seedSpread = maxTotal - minTotal;
-                double mean = totals.stream().mapToInt(Integer::intValue).average().orElse(0.0);
-                double variance = totals.stream().mapToDouble(total -> Math.pow(total - mean, 2)).average().orElse(0.0);
-                double score = femaleViolations * 1000000.0 + seedSpread * 1000.0 + variance;
-
-                DrawCandidate candidate = new DrawCandidate();
-                candidate.candidateId = "cand-" + String.format("%02d%02d", middleShift, weakShift);
-                candidate.score = score;
-                candidate.seedSpread = seedSpread;
-                candidate.variance = variance;
-                candidate.femaleViolations = femaleViolations;
-
-                List<Team> teams = new ArrayList<>();
-                for (int idx = 0; idx < candidateTeams.size(); idx++) {
-                    Team team = new Team();
-                    team.id = "team-" + (idx + 1);
-                    team.name = "Đội " + (idx + 1);
-                    team.players = candidateTeams.get(idx).stream()
-                        .map(p -> new Competitor(p.id, p.name))
-                        .collect(Collectors.toList());
-                    teams.add(team);
-                }
-                candidate.teams = teams;
-                candidates.add(candidate);
-                    }
+                totals.add(sum);
+                if (femaleCount > maxFemalePerTeam) {
+                    femaleViolations += (femaleCount - maxFemalePerTeam);
                 }
             }
+            int maxTotal = Collections.max(totals);
+            int minTotal = Collections.min(totals);
+            int seedSpread = maxTotal - minTotal;
+            double mean = totals.stream().mapToInt(Integer::intValue).average().orElse(0.0);
+            double variance = totals.stream().mapToDouble(total -> Math.pow(total - mean, 2)).average().orElse(0.0);
+            double score = femaleViolations * 1000000.0 + seedSpread * 1000.0 + variance;
+
+            DrawCandidate candidate = new DrawCandidate();
+            candidate.candidateId = "cand-" + iter;
+            candidate.score = score;
+            candidate.seedSpread = seedSpread;
+            candidate.variance = variance;
+            candidate.femaleViolations = femaleViolations;
+
+            List<Team> teams = new ArrayList<>();
+            for (int idx = 0; idx < candidateTeams.size(); idx++) {
+                Team team = new Team();
+                team.id = "team-" + (idx + 1);
+                team.name = "Đội " + (idx + 1);
+                team.players = candidateTeams.get(idx).stream()
+                    .map(p -> new Competitor(p.id, p.name))
+                    .collect(Collectors.toList());
+                teams.add(team);
+            }
+            candidate.teams = teams;
+            candidates.add(candidate);
         }
 
         candidates.sort(Comparator.comparingDouble(c -> c.score));
