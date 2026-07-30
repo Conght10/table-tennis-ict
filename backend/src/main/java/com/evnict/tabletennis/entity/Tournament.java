@@ -87,4 +87,10 @@ public class Tournament {
 
     @Transient
     private List<Object> seedOverrideHistory;
+
+    @Transient
+    private java.util.Map<String, Object> drawRules;
+
+    @Transient
+    private List<Object> manualTeamSlots;
 }

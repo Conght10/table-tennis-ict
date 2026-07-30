@@ -301,6 +301,114 @@ public class TournamentController {
             tournament.setDrawRevisionCurrent(updatedData.getDrawRevisionCurrent());
         }
 
+        if (updatedData.getDrawRevisions() != null) {
+            List<TournamentDrawRevision> existingRevs = tournamentDrawRevisionRepository.findByTournamentIdOrderByRevisionNoDesc(id);
+            Set<Integer> existingNos = existingRevs.stream()
+                .map(TournamentDrawRevision::getRevisionNo)
+                .collect(Collectors.toSet());
+
+            for (Object obj : updatedData.getDrawRevisions()) {
+                if (obj instanceof Map<?, ?> map) {
+                    Object revisionNoObj = map.get("revisionNo");
+                    if (revisionNoObj instanceof Number num) {
+                        int revNo = num.intValue();
+                        if (!existingNos.contains(revNo)) {
+                            // This is a new revision, save it!
+                            TournamentDrawRevision newRev = new TournamentDrawRevision();
+                            newRev.setId("dr" + UUID.randomUUID().toString().substring(0, 10));
+                            newRev.setTournamentId(id);
+                            newRev.setRevisionNo(revNo);
+                            newRev.setStatus(map.get("status") != null ? map.get("status").toString() : "committed");
+                            newRev.setReason(map.get("reason") != null ? map.get("reason").toString() : "");
+                            newRev.setActorId(map.get("actorId") != null ? map.get("actorId").toString() : "system");
+                            
+                            Object createdAtObj = map.get("createdAt");
+                            if (createdAtObj != null) {
+                                try {
+                                    newRev.setCreatedAt(LocalDateTime.parse(createdAtObj.toString().substring(0, 19)));
+                                } catch (Exception e) {
+                                    newRev.setCreatedAt(LocalDateTime.now());
+                                }
+                            } else {
+                                newRev.setCreatedAt(LocalDateTime.now());
+                            }
+                            
+                            Object basedOnVersionObj = map.get("basedOnRegistrationVersion");
+                            if (basedOnVersionObj instanceof Number bNum) {
+                                newRev.setBasedOnRegistrationVersion(bNum.intValue());
+                            } else {
+                                newRev.setBasedOnRegistrationVersion(tournament.getRegistrationVersion());
+                            }
+
+                            tournamentDrawRevisionRepository.save(newRev);
+
+                            // Save teams
+                            Object teamsObj = map.get("teams");
+                            if (teamsObj instanceof List<?> teamsList) {
+                                for (Object tObj : teamsList) {
+                                    if (tObj instanceof Map<?, ?> teamMap) {
+                                        TournamentDrawRevisionTeam revTeam = new TournamentDrawRevisionTeam();
+                                        revTeam.setRevisionId(newRev.getId());
+                                        
+                                        Object teamIdObj = teamMap.get("teamId");
+                                        revTeam.setTeamId(teamIdObj != null ? teamIdObj.toString() : "");
+                                        
+                                        Object teamNameObj = teamMap.get("teamName");
+                                        revTeam.setTeamName(teamNameObj != null ? teamNameObj.toString() : "");
+                                        
+                                        Object seedTotalObj = teamMap.get("seedTotal");
+                                        if (seedTotalObj instanceof Number sNum) {
+                                            revTeam.setSeedTotal(sNum.intValue());
+                                        }
+
+                                        tournamentDrawRevisionTeamRepository.save(revTeam);
+
+                                        // Save team members
+                                        Object memberIdsObj = teamMap.get("memberIds");
+                                        if (memberIdsObj instanceof List<?> memberIdsList) {
+                                            for (Object mIdObj : memberIdsList) {
+                                                if (mIdObj != null) {
+                                                    TournamentDrawRevisionTeamMember revMember = new TournamentDrawRevisionTeamMember();
+                                                    revMember.setRevisionId(newRev.getId());
+                                                    revMember.setTeamId(revTeam.getTeamId());
+                                                    revMember.setMemberId(mIdObj.toString());
+                                                    tournamentDrawRevisionTeamMemberRepository.save(revMember);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Save groups
+                            Object groupsObj = map.get("groups");
+                            if (groupsObj instanceof List<?> groupsList) {
+                                for (Object gObj : groupsList) {
+                                    if (gObj instanceof Map<?, ?> groupMap) {
+                                        Object groupNameObj = groupMap.get("groupName");
+                                        String groupName = groupNameObj != null ? groupNameObj.toString() : "";
+                                        
+                                        Object competitorIdsObj = groupMap.get("competitorIds");
+                                        if (competitorIdsObj instanceof List<?> competitorIdsList) {
+                                            for (Object cIdObj : competitorIdsList) {
+                                                if (cIdObj != null) {
+                                                    TournamentDrawRevisionGroup revGroup = new TournamentDrawRevisionGroup();
+                                                    revGroup.setRevisionId(newRev.getId());
+                                                    revGroup.setGroupName(groupName);
+                                                    revGroup.setCompetitorId(cIdObj.toString());
+                                                    tournamentDrawRevisionGroupRepository.save(revGroup);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         touchMetadataVersion(tournament);
 
         Tournament saved = tournamentRepository.save(tournament);
@@ -2127,6 +2235,8 @@ public class TournamentController {
             tournament.setKnockoutMatches(new ArrayList<>());
             tournament.setTeams(new ArrayList<>());
             tournament.setCaptains(new ArrayList<>());
+            tournament.setDrawRules(new HashMap<>());
+            tournament.setManualTeamSlots(new ArrayList<>());
         } else {
             tournament.setParticipants(copyStringList(state.getParticipants()));
             tournament.setGroups(copyObjectList(state.getGroups()));
@@ -2134,6 +2244,8 @@ public class TournamentController {
             tournament.setKnockoutMatches(copyObjectList(state.getKnockoutMatches()));
             tournament.setTeams(copyObjectList(state.getTeams()));
             tournament.setCaptains(copyStringList(state.getCaptains()));
+            tournament.setDrawRules(state.getDrawRules());
+            tournament.setManualTeamSlots(copyObjectList(state.getManualTeamSlots()));
         }
 
         // Hydrate Registrations & Auto Backfill if registrations are empty
@@ -2237,6 +2349,8 @@ public class TournamentController {
         state.setKnockoutMatches(copyObjectList(tournament.getKnockoutMatches()));
         state.setTeams(copyObjectList(tournament.getTeams()));
         state.setCaptains(copyStringList(tournament.getCaptains()));
+        state.setDrawRules(tournament.getDrawRules());
+        state.setManualTeamSlots(copyObjectList(tournament.getManualTeamSlots()));
         tournamentStateRepository.save(state);
     }
 

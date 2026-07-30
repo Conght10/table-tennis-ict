@@ -42,4 +42,12 @@ public class TournamentState {
     @Convert(converter = StringListConverter.class)
     @Column(columnDefinition = "TEXT")
     private List<String> captains;
+
+    @Convert(converter = com.evnict.tabletennis.util.JsonConverters.MapConverter.class)
+    @Column(name = "draw_rules", columnDefinition = "TEXT")
+    private java.util.Map<String, Object> drawRules;
+
+    @Convert(converter = ObjectListConverter.class)
+    @Column(name = "manual_team_slots", columnDefinition = "TEXT")
+    private List<Object> manualTeamSlots;
 }

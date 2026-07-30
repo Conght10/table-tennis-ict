@@ -1395,7 +1395,13 @@ export class EvnictDataService {
             .sort((left, right) => left.seed - right.seed);
 
         const potRanges = tournament.drawRules.seededPotRanges.map((range) => ({ min: range.min, max: range.max }));
-        return this.tournamentEngine.generateTeamsBySeedPots(players, tournament.teamSize ?? 3, potRanges, tournament.drawRules.maxFemalePerTeam);
+        return this.tournamentEngine.generateTeamsBySeedPots(
+            players,
+            tournament.teamSize ?? 3,
+            potRanges,
+            tournament.drawRules.maxFemalePerTeam,
+            tournament.captains || []
+        );
     }
 
     private appendDrawRevision(tournament: Tournament, reason: string, actorId: string, status: 'committed' | 'dirty'): number {
@@ -2612,9 +2618,23 @@ export class EvnictDataService {
 
         this.ensureTournamentRegistrations(t);
 
-        if (t.participants && t.participants.includes(memberId)) {
-            t.participants = t.participants.filter(pid => pid !== memberId);
-            t.registrations = (t.registrations || []).filter((registration) => registration.memberId !== memberId);
+        const hasParticipant = t.participants && t.participants.includes(memberId);
+        const hasRegistration = t.registrations && t.registrations.some((r) => r.memberId === memberId);
+
+        if (hasParticipant || hasRegistration) {
+            if (t.participants) {
+                t.participants = t.participants.filter(pid => pid !== memberId);
+            }
+            if (t.registrations) {
+                t.registrations = t.registrations.filter((registration) => registration.memberId !== memberId);
+                // Re-seed remaining players contiguously from 1
+                t.registrations.forEach((reg, index) => {
+                    reg.seed = index + 1;
+                });
+            }
+
+            // Sync t.participants to match the remaining registrations
+            t.participants = (t.registrations || []).map((r) => r.memberId);
 
             // Clear teams/groups to avoid inconsistent draft states
             t.teams = [];

@@ -60,7 +60,8 @@ export class TournamentEngineService {
         players: SeededCompetitor[],
         teamSize: number,
         potRanges: Array<{ min: number; max: number }>,
-        maxFemalePerTeam: number
+        maxFemalePerTeam: number,
+        designatedCaptains?: string[]
     ): Team[] | null {
         if (teamSize !== 3 || potRanges.length !== 3) {
             return null;
@@ -85,10 +86,61 @@ export class TournamentEngineService {
         }
 
         // pot0 = strongest (small seed), pot1 = medium, pot2 = weakest (large seed)
-        // pot0 stays sorted ascending (fixed) — team captain/name comes from pot0[i]
         const pot0 = pots[0]; // sorted ascending already
         const pot1 = pots[1]; // sorted ascending
         const pot2 = pots[2]; // sorted ascending
+
+        // Create player to pot index map
+        const playerPotIndexMap = new Map<string, number>();
+        pot0.forEach(p => playerPotIndexMap.set(p.id, 0));
+        pot1.forEach(p => playerPotIndexMap.set(p.id, 1));
+        pot2.forEach(p => playerPotIndexMap.set(p.id, 2));
+
+        // Build the finalized captains list of size N
+        const captainsList: SeededCompetitor[] = [];
+        const regularPlayersList: SeededCompetitor[] = [];
+
+        for (const p of sortedPlayers) {
+            if (designatedCaptains && designatedCaptains.includes(p.id) && playerPotIndexMap.has(p.id)) {
+                captainsList.push(p);
+            } else {
+                regularPlayersList.push(p);
+            }
+        }
+
+        // Fill captains list up to N using players from pot0 who are not already captains
+        const sortedRemainingPot0 = [...regularPlayersList]
+            .filter(p => playerPotIndexMap.get(p.id) === 0)
+            .sort((a, b) => (a.seed ?? 999) - (b.seed ?? 999));
+        while (captainsList.length < N && sortedRemainingPot0.length > 0) {
+            const additionalCaptain = sortedRemainingPot0.shift()!;
+            captainsList.push(additionalCaptain);
+            const idx = regularPlayersList.findIndex(p => p.id === additionalCaptain.id);
+            if (idx >= 0) regularPlayersList.splice(idx, 1);
+        }
+
+        // If still not enough, use strongest remaining players overall
+        const sortedRemainingOverall = [...regularPlayersList]
+            .sort((a, b) => (a.seed ?? 999) - (b.seed ?? 999));
+        while (captainsList.length < N && sortedRemainingOverall.length > 0) {
+            const additionalCaptain = sortedRemainingOverall.shift()!;
+            captainsList.push(additionalCaptain);
+            const idx = regularPlayersList.findIndex(p => p.id === additionalCaptain.id);
+            if (idx >= 0) regularPlayersList.splice(idx, 1);
+        }
+
+        // Trim captains if we have more than N
+        while (captainsList.length > N) {
+            const excessCaptain = captainsList.pop();
+            if (excessCaptain) {
+                regularPlayersList.push(excessCaptain);
+            }
+        }
+
+        // Non-captain pools for each pot
+        const pot0_non_captains = pot0.filter(p => !captainsList.some(c => c.id === p.id));
+        const pot1_non_captains = pot1.filter(p => !captainsList.some(c => c.id === p.id));
+        const pot2_non_captains = pot2.filter(p => !captainsList.some(c => c.id === p.id));
 
         const isFem = (p: SeededCompetitor) => this.isFemale(p.gender);
 
@@ -96,21 +148,39 @@ export class TournamentEngineService {
         let bestCandidate: { teamGroups: SeededCompetitor[][]; score: number } | null = null;
         const allCandidates: Array<{ teamGroups: SeededCompetitor[][]; score: number }> = [];
 
-        // Monte Carlo: Run iterations dynamically depending on N
+        // Monte Carlo: Run iterations
         let ITERATIONS = 500000;
         let foundIdeal = false;
 
         for (let iter = 0; iter < ITERATIONS; iter++) {
-            const p1 = this.shuffle([...pot1]);
-            const p2 = this.shuffle([...pot2]);
+            const shuf0 = this.shuffle([...pot0_non_captains]);
+            const shuf1 = this.shuffle([...pot1_non_captains]);
+            const shuf2 = this.shuffle([...pot2_non_captains]);
 
             // Form candidate teams
             const teamGroups: SeededCompetitor[][] = [];
             let femaleViolation = 0;
+            let idx0 = 0;
+            let idx1 = 0;
+            let idx2 = 0;
 
             for (let i = 0; i < N; i++) {
-                const team = [pot0[i], p1[i], p2[i]];
-                
+                const captain = captainsList[i];
+                const pIndex = playerPotIndexMap.get(captain.id)!;
+
+                const team: SeededCompetitor[] = [captain];
+
+                if (pIndex === 0) {
+                    team.push(shuf1[idx1++]);
+                    team.push(shuf2[idx2++]);
+                } else if (pIndex === 1) {
+                    team.push(shuf0[idx0++]);
+                    team.push(shuf2[idx2++]);
+                } else {
+                    team.push(shuf0[idx0++]);
+                    team.push(shuf1[idx1++]);
+                }
+
                 // Count females
                 const femaleCount = team.filter(isFem).length;
                 if (femaleCount > maxFemalePerTeam) {
@@ -155,14 +225,12 @@ export class TournamentEngineService {
             chosen = bestCandidate;
         } else {
             // Accept all candidates within 3 seed-spread of optimal (tolerance for variety)
-            // Score formula: femViolation*1M + (maxSpread)*1K + variance
-            // 3 seed-spread tolerance = 3000 score points
             const SPREAD_TOLERANCE = 3_000;
             const candidates = allCandidates.filter((c) => c.score <= bestScore + SPREAD_TOLERANCE);
 
             if (candidates.length === 0) return null;
 
-            // De-duplicate candidate configurations (set of 7 teams) to avoid duplicates
+            // De-duplicate candidate configurations to avoid duplicates
             const uniqueConfigs = new Map<string, typeof candidates[0]>();
             for (const c of candidates) {
                 const teamKeys = c.teamGroups.map(team => 
@@ -174,7 +242,7 @@ export class TournamentEngineService {
             }
             const uniqueList = Array.from(uniqueConfigs.values());
 
-            // Exclude the last selected team composition for the first captain (pot0[0]) if there are other unique options
+            // Exclude the last selected team composition for the first captain (captainsList[0]) if there are other unique options
             let filteredList = uniqueList;
             if (this.lastSelectedCaptainTeamKey && uniqueList.length > 1) {
                 const temp = uniqueList.filter(c => {
@@ -195,11 +263,11 @@ export class TournamentEngineService {
         const chosenCaptainTeam = chosen.teamGroups[0];
         this.lastSelectedCaptainTeamKey = chosenCaptainTeam.map(p => p.id).sort().join(',');
 
-        return pot0.map((p, i) => ({
+        return captainsList.map((c, i) => ({
             id: `team-${i + 1}`,
-            name: p.name ? `Đội ${p.name}` : `Đội ${i + 1}`,
+            name: c.name ? `Đội ${c.name}` : `Đội ${i + 1}`,
             players: [
-                { id: p.id, name: p.name },
+                { id: c.id, name: c.name },
                 { id: chosen.teamGroups[i][1].id, name: chosen.teamGroups[i][1].name },
                 { id: chosen.teamGroups[i][2].id, name: chosen.teamGroups[i][2].name }
             ]

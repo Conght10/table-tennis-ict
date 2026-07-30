@@ -46,4 +46,24 @@ public class JsonConverters {
             }
         }
     }
+
+    @Converter
+    public static class MapConverter implements AttributeConverter<java.util.Map<String, Object>, String> {
+        @Override
+        public String convertToDatabaseColumn(java.util.Map<String, Object> attribute) {
+            try {
+                return attribute == null ? null : mapper.writeValueAsString(attribute);
+            } catch (JsonProcessingException e) {
+                return "{}";
+            }
+        }
+        @Override
+        public java.util.Map<String, Object> convertToEntityAttribute(String dbData) {
+            try {
+                return dbData == null || dbData.isEmpty() ? new java.util.HashMap<>() : mapper.readValue(dbData, new TypeReference<java.util.Map<String, Object>>() {});
+            } catch (IOException e) {
+                return new java.util.HashMap<>();
+            }
+        }
+    }
 }
