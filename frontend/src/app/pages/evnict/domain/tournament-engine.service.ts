@@ -18,6 +18,7 @@ interface MutableStanding<TCompetitor extends Competitor> {
     matchPoints: number;
     setsFor: number;
     setsAgainst: number;
+    tieBreakLot?: number;
 }
 
 interface SeededCompetitor extends Competitor {
@@ -31,6 +32,7 @@ interface SeededCompetitor extends Competitor {
 export class TournamentEngineService {
     private readonly winPoints = 3;
     private readonly lossPoints = 0;
+    private lastSelectedCaptainTeamKey = '';
 
     generateRandomTeams<TPlayer extends Competitor>(players: readonly TPlayer[], teamSize: number): Team[] {
         const effectiveTeamSize = Math.max(teamSize, 1);
@@ -64,71 +66,130 @@ export class TournamentEngineService {
             return null;
         }
 
-        const sortedPlayers = [...players].sort((left, right) => (left.seed ?? 999999) - (right.seed ?? 999999));
+        const sortedPlayers = [...players].sort((a, b) => (a.seed ?? 999999) - (b.seed ?? 999999));
+
+        // Partition into 3 pots by seed range (or equal thirds if ranges don't match)
         let pots = potRanges.map((range) =>
-            sortedPlayers.filter((player) => player.seed >= range.min && player.seed <= range.max)
+            sortedPlayers.filter((p) => p.seed >= range.min && p.seed <= range.max)
         );
+        let N = pots[0]?.length || 0;
 
-        let teamCount = pots[0]?.length || 0;
-        if (!teamCount || pots.some((pot) => pot.length !== teamCount)) {
-            // Dynamic slice partitioning: divide sorted players into 3 equal pots (top 1/3, middle 1/3, bottom 1/3)
-            teamCount = Math.floor(sortedPlayers.length / teamSize);
-            if (!teamCount) return null;
-
+        if (!N || pots.some((pot) => pot.length !== N)) {
+            N = Math.floor(sortedPlayers.length / 3);
+            if (!N) return null;
             pots = [
-                sortedPlayers.slice(0, teamCount),
-                sortedPlayers.slice(teamCount, teamCount * 2),
-                sortedPlayers.slice(teamCount * 2, teamCount * 3)
+                sortedPlayers.slice(0, N),
+                sortedPlayers.slice(N, N * 2),
+                sortedPlayers.slice(N * 2, N * 3)
             ];
         }
 
+        // pot0 = strongest (small seed), pot1 = medium, pot2 = weakest (large seed)
+        // pot0 stays sorted ascending (fixed) — team captain/name comes from pot0[i]
+        const pot0 = pots[0]; // sorted ascending already
+        const pot1 = pots[1]; // sorted ascending
+        const pot2 = pots[2]; // sorted ascending
+
+        const isFem = (p: SeededCompetitor) => this.isFemale(p.gender);
+
         let bestScore = Number.POSITIVE_INFINITY;
-        let bestCandidates: SeededCompetitor[][][] = [];
+        const allCandidates: Array<{ teamGroups: SeededCompetitor[][]; score: number }> = [];
 
-        // Shuffle within each pot among players with equal/close seeds for variety
-        const pot0 = this.shuffleNearEqualSeeds([...pots[0]]);
-        const pot1Base = this.shuffleNearEqualSeeds([...pots[1]]);
-        const pot2Base = this.shuffleNearEqualSeeds([...pots[2]]);
+        // Monte Carlo: Run iterations dynamically depending on N
+        let ITERATIONS = 50000;
+        if (N <= 5) {
+            ITERATIONS = 20000;
+        } else if (N === 6) {
+            ITERATIONS = 100000;
+        } else if (N >= 7) {
+            ITERATIONS = 200000;
+        }
+        for (let iter = 0; iter < ITERATIONS; iter++) {
+            const p1 = this.shuffle([...pot1]);
+            const p2 = this.shuffle([...pot2]);
 
-        const pot1Variants = [pot1Base, [...pot1Base].reverse()];
-        const pot2Variants = [pot2Base, [...pot2Base].reverse()];
+            // Form candidate teams
+            const teamGroups: SeededCompetitor[][] = [];
+            let femaleViolation = 0;
 
-        for (const p1 of pot1Variants) {
-            for (const p2 of pot2Variants) {
-                for (let middleShift = 0; middleShift < teamCount; middleShift += 1) {
-                    for (let weakShift = 0; weakShift < teamCount; weakShift += 1) {
-                        const candidateTeams: SeededCompetitor[][] = [];
-                        for (let i = 0; i < teamCount; i += 1) {
-                            candidateTeams.push([
-                                pot0[i],
-                                p1[(i + middleShift) % teamCount],
-                                p2[(i + weakShift) % teamCount]
-                            ]);
-                        }
-
-                        const score = this.evaluateSeededTeams(candidateTeams, maxFemalePerTeam);
-                        if (score < bestScore - 0.001) {
-                            bestScore = score;
-                            bestCandidates = [candidateTeams];
-                        } else if (Math.abs(score - bestScore) < 0.001) {
-                            bestCandidates.push(candidateTeams);
-                        }
-                    }
+            for (let i = 0; i < N; i++) {
+                const team = [pot0[i], p1[i], p2[i]];
+                
+                // Count females
+                const femaleCount = team.filter(isFem).length;
+                if (femaleCount > maxFemalePerTeam) {
+                    femaleViolation += (femaleCount - maxFemalePerTeam);
                 }
+
+                teamGroups.push(team);
+            }
+
+            // Evaluate seed balance
+            const totals = teamGroups.map((team) => team.reduce((sum, player) => sum + (player.seed ?? 0), 0));
+            const maxTotal = Math.max(...totals);
+            const minTotal = Math.min(...totals);
+            const mean = totals.reduce((sum, total) => sum + total, 0) / totals.length;
+            const variance = totals.reduce((sum, total) => sum + Math.pow(total - mean, 2), 0) / totals.length;
+
+            const score = femaleViolation * 1000000 + (maxTotal - minTotal) * 1000 + variance;
+
+            if (score < bestScore) {
+                bestScore = score;
+            }
+
+            allCandidates.push({ teamGroups, score });
+        }
+
+        if (allCandidates.length === 0) return null;
+
+        // Accept all candidates within 3 seed-spread of optimal (tolerance for variety)
+        // Score formula: femViolation*1M + (maxSpread)*1K + variance
+        // 3 seed-spread tolerance = 3000 score points
+        const SPREAD_TOLERANCE = 3_000;
+        const candidates = allCandidates.filter((c) => c.score <= bestScore + SPREAD_TOLERANCE);
+
+        if (candidates.length === 0) return null;
+
+        // De-duplicate candidate configurations (set of 7 teams) to avoid duplicates
+        const uniqueConfigs = new Map<string, typeof candidates[0]>();
+        for (const c of candidates) {
+            const teamKeys = c.teamGroups.map(team => 
+                team.map(p => p.id).sort().join(',')
+            ).sort().join('|');
+            if (!uniqueConfigs.has(teamKeys)) {
+                uniqueConfigs.set(teamKeys, c);
+            }
+        }
+        const uniqueList = Array.from(uniqueConfigs.values());
+
+        // Exclude the last selected team composition for the first captain (pot0[0]) if there are other unique options
+        let filteredList = uniqueList;
+        if (this.lastSelectedCaptainTeamKey && uniqueList.length > 1) {
+            const temp = uniqueList.filter(c => {
+                const captainTeam = c.teamGroups[0];
+                const key = captainTeam.map(p => p.id).sort().join(',');
+                return key !== this.lastSelectedCaptainTeamKey;
+            });
+            if (temp.length > 0) {
+                filteredList = temp;
             }
         }
 
-        if (bestCandidates.length === 0) {
-            return null;
-        }
+        // Randomly pick one unique configuration
+        const chosen = filteredList[Math.floor(Math.random() * filteredList.length)];
+        
+        // Save the selected team composition for the next draw
+        const chosenCaptainTeam = chosen.teamGroups[0];
+        this.lastSelectedCaptainTeamKey = chosenCaptainTeam.map(p => p.id).sort().join(',');
 
-        // Randomly pick one optimal candidate among the tied best options for a true randomized draw
-        const chosenTeams = bestCandidates[Math.floor(Math.random() * bestCandidates.length)];
-
-        return chosenTeams.map((teamPlayers, index) => ({
-            id: `team-${index + 1}`,
-            name: teamPlayers[0]?.name ? `Đội ${teamPlayers[0].name}` : `Đội ${index + 1}`,
-            players: teamPlayers.map((player) => ({ id: player.id, name: player.name }))
+        return pot0.map((p, i) => ({
+            id: `team-${i + 1}`,
+            name: p.name ? `Đội ${p.name}` : `Đội ${i + 1}`,
+            players: [
+                { id: p.id, name: p.name },
+                { id: chosen.teamGroups[i][1].id, name: chosen.teamGroups[i][1].name },
+                { id: chosen.teamGroups[i][2].id, name: chosen.teamGroups[i][2].name }
+            ]
         }));
     }
 
@@ -352,9 +413,12 @@ export class TournamentEngineService {
             return (strengthMap as Record<string, number>)[id] ?? 0;
         };
 
+        // Shuffle competitors before searching to randomize branch exploration order
+        const shuffledCompetitors = this.shuffle([...competitors]);
+
         const currentPartition: TCompetitor[][] = Array.from({ length: k }, () => []);
-        let bestPartition: TCompetitor[][] = Array.from({ length: k }, () => []);
         let minDiff = Number.MAX_VALUE;
+        const allPartitions: Array<{ partition: TCompetitor[][]; diff: number }> = [];
 
         const search = (index: number) => {
             if (index === n) {
@@ -369,12 +433,15 @@ export class TournamentEngineService {
                 const diff = maxAvg - minAvg;
                 if (diff < minDiff) {
                     minDiff = diff;
-                    bestPartition = currentPartition.map((grp) => [...grp]);
                 }
+                allPartitions.push({
+                    partition: currentPartition.map((grp) => [...grp]),
+                    diff
+                });
                 return;
             }
 
-            const comp = competitors[index];
+            const comp = shuffledCompetitors[index];
             for (let i = 0; i < k; i++) {
                 if (currentPartition[i].length < targetSizes[i]) {
                     if (currentPartition[i].length === 0) {
@@ -393,7 +460,21 @@ export class TournamentEngineService {
 
         search(0);
 
-        return bestPartition.map((compList, i) => ({
+        // Filter partitions within a small tolerance of minDiff
+        const TOLERANCE = 1.0;
+        const candidates = allPartitions.filter((p) => p.diff <= minDiff + TOLERANCE);
+
+        if (candidates.length === 0) {
+            // Fallback to first partition
+            return allPartitions[0].partition.map((compList, i) => ({
+                groupName: String.fromCharCode(65 + i),
+                competitors: compList
+            }));
+        }
+
+        const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+
+        return chosen.partition.map((compList, i) => ({
             groupName: String.fromCharCode(65 + i),
             competitors: compList
         }));
@@ -472,9 +553,32 @@ export class TournamentEngineService {
                 .sort((left, right) => this.sortStandingRows(left, right, groupScores))
                 .map((row, index) => ({ ...row, rank: index + 1 }));
 
+            let hasTie = false;
+            const tiedCompetitorIds: string[] = [];
+
+            for (let i = 0; i < rows.length - 1; i++) {
+                const a = rows[i];
+                const b = rows[i + 1];
+                const aDiff = a.pointsFor - a.pointsAgainst;
+                const bDiff = b.pointsFor - b.pointsAgainst;
+                const aSetsDiff = (a.setsFor || 0) - (a.setsAgainst || 0);
+                const bSetsDiff = (b.setsFor || 0) - (b.setsAgainst || 0);
+                const h2h = this.headToHead(a.competitor.id, b.competitor.id, groupScores);
+
+                if (a.matchPoints === b.matchPoints && aDiff === bDiff && aSetsDiff === bSetsDiff && h2h === 0) {
+                    if (a.tieBreakLot === undefined || b.tieBreakLot === undefined) {
+                        hasTie = true;
+                        if (!tiedCompetitorIds.includes(a.competitor.id)) tiedCompetitorIds.push(a.competitor.id);
+                        if (!tiedCompetitorIds.includes(b.competitor.id)) tiedCompetitorIds.push(b.competitor.id);
+                    }
+                }
+            }
+
             return {
                 groupName: group.groupName,
-                rows
+                rows,
+                hasTie,
+                tiedCompetitorIds
             };
         });
     }
@@ -539,7 +643,12 @@ export class TournamentEngineService {
             return headToHead;
         }
 
-        // 5. Tên (Alphabetical)
+        // 5. Kết quả bốc thăm thứ hạng thủ công (tieBreakLot)
+        if (left.tieBreakLot !== undefined && right.tieBreakLot !== undefined) {
+            return left.tieBreakLot - right.tieBreakLot;
+        }
+
+        // 6. Tên (Alphabetical)
         return left.competitor.name.localeCompare(right.competitor.name);
     }
 
@@ -614,5 +723,31 @@ export class TournamentEngineService {
             [copy[i], copy[j]] = [copy[j], copy[i]];
         }
         return copy;
+    }
+
+    /** Generate all N! permutations of [0, 1, ..., n-1] using backtracking. */
+    private generateAllPermutations(n: number): number[][] {
+        const result: number[][] = [];
+        const current: number[] = [];
+        const used = new Array<boolean>(n).fill(false);
+
+        const backtrack = () => {
+            if (current.length === n) {
+                result.push([...current]);
+                return;
+            }
+            for (let i = 0; i < n; i++) {
+                if (!used[i]) {
+                    used[i] = true;
+                    current.push(i);
+                    backtrack();
+                    current.pop();
+                    used[i] = false;
+                }
+            }
+        };
+
+        backtrack();
+        return result;
     }
 }

@@ -88,6 +88,7 @@ public class DrawCalculationService {
         public int setsFor;
         public int setsAgainst;
         public int rank;
+        public Integer tieBreakLot;
     }
 
     public static class GroupStanding {
@@ -429,6 +430,10 @@ public class DrawCalculationService {
         int headToHead = headToHead(left.competitor.id, right.competitor.id, groupScores);
         if (headToHead != 0) {
             return headToHead;
+        }
+
+        if (left.tieBreakLot != null && right.tieBreakLot != null) {
+            return left.tieBreakLot - right.tieBreakLot;
         }
 
         return left.competitor.name.compareTo(right.competitor.name);

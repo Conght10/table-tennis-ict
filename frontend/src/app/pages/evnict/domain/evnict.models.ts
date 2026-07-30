@@ -214,11 +214,14 @@ export interface GroupStandingRow<TCompetitor extends Competitor> {
     rank: number;
     setsFor?: number;
     setsAgainst?: number;
+    tieBreakLot?: number;
 }
 
 export interface GroupStanding<TCompetitor extends Competitor> {
     groupName: string;
     rows: GroupStandingRow<TCompetitor>[];
+    hasTie?: boolean;
+    tiedCompetitorIds?: string[];
 }
 
 export interface EloSettings {

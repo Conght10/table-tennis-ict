@@ -3314,6 +3314,13 @@ public class TournamentController {
             return headToHead;
         }
 
+        Object leftLot = left.get("tieBreakLot");
+        Object rightLot = right.get("tieBreakLot");
+        if (leftLot != null && rightLot != null) {
+            int lotDiff = asInt(leftLot) - asInt(rightLot);
+            if (lotDiff != 0) return lotDiff;
+        }
+
         String leftName = asString(toObjectMap(left.get("competitor")).get("name"));
         String rightName = asString(toObjectMap(right.get("competitor")).get("name"));
         return leftName.compareToIgnoreCase(rightName);

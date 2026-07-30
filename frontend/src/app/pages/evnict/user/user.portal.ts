@@ -459,19 +459,19 @@ interface ParticipationView {
                                                 <h3 class="text-xl font-extrabold text-slate-100 mb-6 text-center">BỤC VINH QUANG GIẢI ĐẤU</h3>
 
                                                 <!-- The 3D-styled Podium Layout -->
-                                                <div class="flex items-end justify-center w-full max-w-3xl mx-auto pt-6 pb-2 gap-6">
+                                                <div class="flex items-end justify-center w-full max-w-4xl mx-auto pt-6 pb-2 gap-3 md:gap-5 flex-wrap">
                                                     
                                                     <!-- 2nd Place: Left Column -->
-                                                    <div class="flex flex-col items-center flex-1 min-w-[150px] max-w-[220px]">
+                                                    <div class="flex flex-col items-center flex-1 min-w-[130px] max-w-[190px]">
                                                         <div class="text-center mb-3 w-full px-1">
                                                             <div class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-slate-800 border-2 border-slate-350 font-black text-xs text-slate-200 shadow-md mb-2">
                                                                 2nd
                                                             </div>
                                                             <div class="text-xs font-bold text-slate-200 leading-tight">
-                                                                {{ getTopThreeWinners(currTournament).second?.name || 'Đang đấu...' }}
+                                                                {{ getPodiumWinners(currTournament).second?.name || 'Đang đấu...' }}
                                                             </div>
-                                                            <div *ngIf="currTournament.type === 'team' && getTopThreeWinners(currTournament).second?.id" class="text-[10px] text-slate-400 font-normal leading-snug mt-1 block">
-                                                                {{ getTeamPlayersText(getTopThreeWinners(currTournament).second?.id || '') }}
+                                                            <div *ngIf="currTournament.type === 'team' && getPodiumWinners(currTournament).second?.id" class="text-[10px] text-slate-400 font-normal leading-snug mt-1 block">
+                                                                {{ getTeamPlayersText(getPodiumWinners(currTournament).second?.id || '') }}
                                                             </div>
                                                         </div>
                                                         <!-- Podium block -->
@@ -479,25 +479,25 @@ interface ParticipationView {
                                                             <div class="flex flex-col items-center px-1">
                                                                 <i class="pi pi-medal text-xl text-slate-300"></i>
                                                                 <span class="text-[10px] text-slate-200 font-bold mt-1">GIẢI NHÌ</span>
-                                                                <span class="text-[10px] text-amber-300 font-black mt-0.5" *ngIf="getPrizeForPodium(currTournament, 1)">
-                                                                    {{ getPrizeForPodium(currTournament, 1) }}
+                                                                <span class="text-[10px] text-amber-300 font-black mt-0.5" *ngIf="getPrizeForPodium(currTournament, 'second')">
+                                                                    {{ getPrizeForPodium(currTournament, 'second') }}
                                                                 </span>
                                                             </div>
                                                         </div>
                                                     </div>
 
                                                     <!-- 1st Place: Center Column -->
-                                                    <div class="flex flex-col items-center flex-1 min-w-[170px] max-w-[240px]">
+                                                    <div class="flex flex-col items-center flex-1 min-w-[150px] max-w-[210px]">
                                                         <div class="text-center mb-3 w-full px-1 scale-105 transform">
                                                             <div class="inline-flex items-center justify-center w-11 h-11 rounded-full bg-amber-950 border-2 border-amber-400 font-black text-sm text-amber-400 shadow-lg relative mb-2">
                                                                 <i class="pi pi-prime absolute -top-3 text-yellow-400 text-xs animate-bounce"></i>
                                                                 1st
                                                             </div>
                                                             <div class="text-sm font-black text-amber-300 leading-tight">
-                                                                {{ getTopThreeWinners(currTournament).first?.name || 'Đang đấu...' }}
+                                                                {{ getPodiumWinners(currTournament).first?.name || 'Đang đấu...' }}
                                                             </div>
-                                                            <div *ngIf="currTournament.type === 'team' && getTopThreeWinners(currTournament).first?.id" class="text-[11px] text-amber-400 font-medium leading-snug mt-1 block">
-                                                                {{ getTeamPlayersText(getTopThreeWinners(currTournament).first?.id || '') }}
+                                                            <div *ngIf="currTournament.type === 'team' && getPodiumWinners(currTournament).first?.id" class="text-[11px] text-amber-400 font-medium leading-snug mt-1 block">
+                                                                {{ getTeamPlayersText(getPodiumWinners(currTournament).first?.id || '') }}
                                                             </div>
                                                         </div>
                                                         <!-- Podium block -->
@@ -506,33 +506,58 @@ interface ParticipationView {
                                                             <div class="flex flex-col items-center px-1">
                                                                 <i class="pi pi-trophy text-3xl text-yellow-350 drop-shadow"></i>
                                                                 <span class="text-xs text-white font-black mt-1">VÔ ĐỊCH</span>
-                                                                <span class="text-xs text-yellow-200 font-black mt-0.5 animate-pulse" *ngIf="getPrizeForPodium(currTournament, 0)">
-                                                                    {{ getPrizeForPodium(currTournament, 0) }}
+                                                                <span class="text-xs text-yellow-250 font-black mt-0.5 animate-pulse" *ngIf="getPrizeForPodium(currTournament, 'first')">
+                                                                    {{ getPrizeForPodium(currTournament, 'first') }}
                                                                 </span>
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    <!-- 3rd Place: Right Column -->
-                                                    <div class="flex flex-col items-center flex-1 min-w-[150px] max-w-[220px]">
+                                                    <!-- 3rd Place 1: Right Column -->
+                                                    <div class="flex flex-col items-center flex-1 min-w-[130px] max-w-[190px]">
                                                         <div class="text-center mb-3 w-full px-1">
                                                             <div class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-orange-950 border-2 border-orange-650 font-black text-xs text-orange-400 shadow-md mb-2">
                                                                 3rd
                                                             </div>
                                                             <div class="text-xs font-bold text-orange-355 leading-tight">
-                                                                {{ getTopThreeWinners(currTournament).third?.name || 'Đang đấu...' }}
+                                                                {{ getPodiumWinners(currTournament).third?.name || 'Đang đấu...' }}
                                                             </div>
-                                                            <div *ngIf="currTournament.type === 'team' && getTopThreeWinners(currTournament).third?.id" class="text-[10px] text-slate-400 font-normal leading-snug mt-1 block">
-                                                                {{ getTeamPlayersText(getTopThreeWinners(currTournament).third?.id || '') }}
+                                                            <div *ngIf="currTournament.type === 'team' && getPodiumWinners(currTournament).third?.id" class="text-[10px] text-slate-400 font-normal leading-snug mt-1 block">
+                                                                {{ getTeamPlayersText(getPodiumWinners(currTournament).third?.id || '') }}
                                                             </div>
                                                         </div>
                                                         <!-- Podium block -->
                                                         <div class="w-full h-16 bg-gradient-to-t from-orange-800/80 to-amber-750/80 border border-orange-650 rounded-t-xl flex items-center justify-center shadow-lg text-center">
                                                             <div class="flex flex-col items-center px-1">
                                                                 <i class="pi pi-medal text-xl text-orange-400"></i>
-                                                                <span class="text-[10px] text-orange-200 font-bold mt-1">GIẢI BA</span>
-                                                                <span class="text-[10px] text-amber-300 font-black mt-0.5" *ngIf="getPrizeForPodium(currTournament, 2)">
-                                                                    {{ getPrizeForPodium(currTournament, 2) }}
+                                                                <span class="text-[10px] text-orange-200 font-bold mt-1">{{ getPodiumWinners(currTournament).hasTwoThirds ? 'ĐỒNG GIẢI BA' : 'GIẢI BA' }}</span>
+                                                                <span class="text-[10px] text-amber-300 font-black mt-0.5" *ngIf="getPrizeForPodium(currTournament, 'third')">
+                                                                    {{ getPrizeForPodium(currTournament, 'third') }}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- 3rd Place 2 (Only if 2 Third Places exist) -->
+                                                    <div *ngIf="getPodiumWinners(currTournament).hasTwoThirds" class="flex flex-col items-center flex-1 min-w-[130px] max-w-[190px]">
+                                                        <div class="text-center mb-3 w-full px-1">
+                                                            <div class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-orange-950 border-2 border-orange-650 font-black text-xs text-orange-400 shadow-md mb-2">
+                                                                3rd
+                                                            </div>
+                                                            <div class="text-xs font-bold text-orange-355 leading-tight">
+                                                                {{ getPodiumWinners(currTournament).third2?.name || 'Đang đấu...' }}
+                                                            </div>
+                                                            <div *ngIf="currTournament.type === 'team' && getPodiumWinners(currTournament).third2?.id" class="text-[10px] text-slate-400 font-normal leading-snug mt-1 block">
+                                                                {{ getTeamPlayersText(getPodiumWinners(currTournament).third2?.id || '') }}
+                                                            </div>
+                                                        </div>
+                                                        <!-- Podium block -->
+                                                        <div class="w-full h-16 bg-gradient-to-t from-orange-800/80 to-amber-750/80 border border-orange-650 rounded-t-xl flex items-center justify-center shadow-lg text-center">
+                                                            <div class="flex flex-col items-center px-1">
+                                                                <i class="pi pi-medal text-xl text-orange-400"></i>
+                                                                <span class="text-[10px] text-orange-200 font-bold mt-1">ĐỒNG GIẢI BA</span>
+                                                                <span class="text-[10px] text-amber-300 font-black mt-0.5" *ngIf="getPrizeForPodium(currTournament, 'third')">
+                                                                    {{ getPrizeForPodium(currTournament, 'third') }}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -1660,6 +1685,13 @@ export class UserPortal implements OnInit {
         return team ? team.players : [];
     }
 
+    getTeamPlayersText(teamId: string): string {
+        if (!this.currTournament || !this.currTournament.teams) return '';
+        const team = this.currTournament.teams.find((t: any) => t.id === teamId);
+        if (!team) return '';
+        return team.players.map((p: any) => p.name).join(', ');
+    }
+
     getSubMatchPlayerNames(players: string[]): string {
         if (!players || players.length === 0) return 'Chưa đăng ký';
         return players.map(pid => `${this.memberName(pid)} (Hạng ${this.getMemberRank(pid)})`).join(' + ');
@@ -1777,7 +1809,6 @@ export class UserPortal implements OnInit {
         }
         return this.activeMembers.find((member) => member.id === memberId)?.fullName ?? memberId;
     }
-
     opponentName(match: MatchRecord): string {
         if (match.homePlayerId === this.currentUserId) {
             return this.memberName(match.awayPlayerId);
@@ -1819,6 +1850,76 @@ export class UserPortal implements OnInit {
         }
     }
 
+    getPodiumWinners(t: Tournament): { first?: { id: string, name: string }, second?: { id: string, name: string }, third?: { id: string, name: string }, third2?: { id: string, name: string }, hasTwoThirds: boolean } {
+        if (!t) return { hasTwoThirds: false };
+        
+        const getCompObj = (id: string): { id: string, name: string } => {
+            const m = this.dataService.getMemberById(id);
+            if (m) return { id, name: m.fullName };
+            const team = t.teams?.find((tm: any) => tm.id === id);
+            return { id, name: team ? team.name : id };
+        };
+
+        if (t.format === 'round_robin') {
+            const std = t.standings || [];
+            const rows = std[0] ? std[0].rows : [];
+            const hasTwo3rdPrizes = (t.prizes || []).filter(p => (p.title || '').toLowerCase().includes('ba')).length >= 2;
+            return {
+                first: rows[0] ? { id: rows[0].competitor.id, name: rows[0].competitor.name } : undefined,
+                second: rows[1] ? { id: rows[1].competitor.id, name: rows[1].competitor.name } : undefined,
+                third: rows[2] ? { id: rows[2].competitor.id, name: rows[2].competitor.name } : undefined,
+                third2: hasTwo3rdPrizes && rows[3] ? { id: rows[3].competitor.id, name: rows[3].competitor.name } : undefined,
+                hasTwoThirds: hasTwo3rdPrizes && !!rows[3]
+            };
+        }
+
+        const matches = t.knockoutMatches || [];
+        const finalMatch = matches.find(m => m.roundName === 'Finals');
+        
+        let first: { id: string, name: string } | undefined;
+        let second: { id: string, name: string } | undefined;
+        let third: { id: string, name: string } | undefined;
+        let third2: { id: string, name: string } | undefined;
+        let hasTwoThirds = false;
+
+        if (finalMatch && finalMatch.winnerId !== undefined) {
+            const winnerId = finalMatch.winnerId;
+            const loserId = winnerId === finalMatch.homeCompetitorId ? finalMatch.awayCompetitorId : finalMatch.homeCompetitorId;
+
+            first = getCompObj(winnerId);
+            second = getCompObj(loserId);
+
+            const bronzeMatch = matches.find(m => m.roundName === 'Bronze' || m.id === '3rd-1');
+            if (bronzeMatch && bronzeMatch.winnerId !== undefined) {
+                third = getCompObj(bronzeMatch.winnerId);
+                hasTwoThirds = false;
+            } else {
+                const semiMatches = matches.filter(m => m.roundName === 'Semifinals');
+                const losers: string[] = [];
+                semiMatches.forEach(m => {
+                    if (m.winnerId !== undefined) {
+                        const lId = m.winnerId === m.homeCompetitorId ? m.awayCompetitorId : m.homeCompetitorId;
+                        if (lId) losers.push(lId);
+                    }
+                });
+                if (losers.length > 0) {
+                    third = getCompObj(losers[0]);
+                }
+                if (losers.length > 1) {
+                    third2 = getCompObj(losers[1]);
+                    hasTwoThirds = true;
+                }
+            }
+        }
+
+        return { first, second, third, third2, hasTwoThirds };
+    }
+
+    getTopThreeWinners(t: Tournament): { first?: { id: string, name: string }, second?: { id: string, name: string }, third?: { id: string, name: string } } {
+        const res = this.getPodiumWinners(t);
+        return { first: res.first, second: res.second, third: res.third };
+    }
+
     getChallengeSeverity(status: string): 'success' | 'warn' | 'danger' | 'info' {
         switch (status) {
             case 'accepted': return 'success';
@@ -1852,71 +1953,6 @@ export class UserPortal implements OnInit {
         return prizes.map(p => `${p.title}: ${p.amount.toLocaleString()}đ`).join(', ');
     }
 
-    getTopThreeWinners(t: Tournament): { first?: { id: string, name: string }, second?: { id: string, name: string }, third?: { id: string, name: string } } {
-        if (!t) return {};
-        
-        // If round_robin
-        if (t.format === 'round_robin') {
-            const std = t.standings || [];
-            const rows = std[0] ? std[0].rows : [];
-            return {
-                first: rows[0] ? { id: rows[0].competitor.id, name: rows[0].competitor.name } : undefined,
-                second: rows[1] ? { id: rows[1].competitor.id, name: rows[1].competitor.name } : undefined,
-                third: rows[2] ? { id: rows[2].competitor.id, name: rows[2].competitor.name } : undefined
-            };
-        }
-
-        // If knockout
-        const matches = t.knockoutMatches || [];
-        const finalMatch = matches.find(m => m.roundName === 'Finals');
-        
-        let first: { id: string, name: string } | undefined;
-        let second: { id: string, name: string } | undefined;
-        let third: { id: string, name: string } | undefined;
-
-        if (finalMatch && finalMatch.homeScore !== undefined && finalMatch.awayScore !== undefined && finalMatch.winnerId !== undefined) {
-            const getCompObj = (id: string): { id: string, name: string } => {
-                const m = this.dataService.getMemberById(id);
-                if (m) return { id, name: m.fullName };
-                const team = t.teams?.find((tm: any) => tm.id === id);
-                return { id, name: team ? team.name : id };
-            };
-
-            const winnerId = finalMatch.winnerId;
-            const loserId = winnerId === finalMatch.homeCompetitorId ? finalMatch.awayCompetitorId : finalMatch.homeCompetitorId;
-
-            first = getCompObj(winnerId);
-            second = getCompObj(loserId);
-
-            // Third place check
-            const bronzeMatch = matches.find(m => m.roundName === 'Bronze' || m.id === '3rd-1');
-            if (bronzeMatch && bronzeMatch.winnerId !== undefined) {
-                third = getCompObj(bronzeMatch.winnerId);
-            } else {
-                const semiMatches = matches.filter(m => m.roundName === 'Semifinals');
-                const losers: string[] = [];
-                semiMatches.forEach(m => {
-                    if (m.homeScore !== undefined && m.awayScore !== undefined && m.winnerId !== undefined) {
-                        const lId = m.winnerId === m.homeCompetitorId ? m.awayCompetitorId : m.homeCompetitorId;
-                        losers.push(lId);
-                    }
-                });
-                if (losers.length > 0) {
-                    third = getCompObj(losers[0]);
-                }
-            }
-        }
-
-        return { first, second, third };
-    }
-
-    getTeamPlayersText(teamId: string): string {
-        if (!this.currTournament || !this.currTournament.teams) return '';
-        const team = this.currTournament.teams.find(t => t.id === teamId);
-        if (!team) return '';
-        return team.players.map(p => p.name).join(', ');
-    }
-
     getCompletedMatchesCount(t: Tournament): number {
         if (!t || !t.scores) return 0;
         const groupCompleted = t.scores.filter(m => m.completed || (m.homeScore !== 0 || m.awayScore !== 0)).length;
@@ -1938,10 +1974,26 @@ export class UserPortal implements OnInit {
         return Math.round((completed / total) * 100);
     }
 
-    getPrizeForPodium(t: Tournament, index: number): string {
-        if (!t || !t.prizes || !t.prizes[index]) return '';
-        const p = t.prizes[index];
-        return `${p.amount.toLocaleString()}đ`;
+    getPrizeForPodium(t: Tournament, indexOrKey: number | 'first' | 'second' | 'third'): string {
+        if (!t || !t.prizes || t.prizes.length === 0) return '';
+        if (typeof indexOrKey === 'number') {
+            const p = t.prizes[indexOrKey];
+            return p ? `${p.amount.toLocaleString()}đ` : '';
+        }
+        const prizes = t.prizes;
+        if (indexOrKey === 'first') {
+            const found = prizes.find(p => /vô địch|nhất|1/i.test(p.title)) || prizes[0];
+            return found ? `${found.amount.toLocaleString()}đ` : '';
+        }
+        if (indexOrKey === 'second') {
+            const found = prizes.find(p => /nhì|2/i.test(p.title)) || prizes[1];
+            return found ? `${found.amount.toLocaleString()}đ` : '';
+        }
+        if (indexOrKey === 'third') {
+            const found = prizes.find(p => /ba|3/i.test(p.title)) || prizes[2] || prizes[prizes.length - 1];
+            return found ? `${found.amount.toLocaleString()}đ` : '';
+        }
+        return '';
     }
 
     isSetScoreValid(home: number | null | undefined, away: number | null | undefined): { valid: boolean, error?: string } {

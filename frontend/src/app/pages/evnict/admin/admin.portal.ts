@@ -47,6 +47,10 @@ import { Router, ActivatedRoute } from '@angular/router';
                                         </button>
                                         <input type="file" class="absolute inset-0 opacity-0 cursor-pointer" (change)="importCSV($event)" accept=".csv, .txt" />
                                     </div>
+                                    <!-- Add Member button -->
+                                    <button class="px-3 py-2 bg-primary text-white rounded text-sm hover:bg-primary-600 flex items-center gap-1 font-semibold transition" (click)="openAddMemberDialog()">
+                                        <i class="pi pi-user-plus"></i> Thêm thành viên
+                                    </button>
                                 </div>
                             </div>
 
@@ -58,28 +62,40 @@ import { Router, ActivatedRoute } from '@angular/router';
                                 <button class="pb-2 font-bold text-sm" [class.border-b-2]="memberFilter === 'pending'" [class.border-primary]="memberFilter === 'pending'" [class.text-primary]="memberFilter === 'pending'" (click)="memberFilter = 'pending'">Đang chờ duyệt ({{ pendingApprovalsCount }})</button>
                             </div>
 
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                                <input
-                                    pInputText
-                                    type="text"
-                                    class="w-full"
-                                    placeholder="Tìm theo tên hoặc username..."
-                                    [(ngModel)]="memberNameSearch"
-                                />
-                                <input
-                                    pInputText
-                                    type="text"
-                                    class="w-full"
-                                    placeholder="Tìm theo phòng/ban..."
-                                    [(ngModel)]="memberDepartmentSearch"
-                                />
+                            <!-- Search + Bulk Action Bar -->
+                            <div class="flex flex-wrap items-center gap-3 mb-4">
+                                <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <input pInputText type="text" class="w-full" placeholder="Tìm theo tên hoặc username..." [(ngModel)]="memberNameSearch" />
+                                    <input pInputText type="text" class="w-full" placeholder="Tìm theo phòng/ban..." [(ngModel)]="memberDepartmentSearch" />
+                                </div>
+                                <!-- Bulk delete bar - only shown when items selected -->
+                                <div *ngIf="selectedMemberIds.size > 0" class="flex items-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg">
+                                    <span class="text-sm font-semibold text-red-700 dark:text-red-400">Đã chọn {{ selectedMemberIds.size }} thành viên</span>
+                                    <button
+                                        class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-semibold flex items-center gap-1 transition"
+                                        (click)="deleteSelectedMembers()">
+                                        <i class="pi pi-trash"></i> Xóa đã chọn
+                                    </button>
+                                    <button
+                                        class="px-3 py-1.5 border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-sm transition"
+                                        (click)="clearMemberSelection()">
+                                        Bỏ chọn
+                                    </button>
+                                </div>
                             </div>
 
                             <div class="overflow-auto border border-surface-200 rounded-lg">
                                 <table class="w-full border-collapse text-left text-sm">
                                     <thead>
                                         <tr class="bg-surface-100 dark:bg-surface-800 border-b border-surface-200">
-                                            <th class="py-2 px-3">Họ Tên, Username & Email</th>
+                                            <th class="py-2 px-3 w-10">
+                                                <input type="checkbox"
+                                                    class="w-4 h-4 cursor-pointer accent-primary"
+                                                    [checked]="isAllMembersSelected()"
+                                                    [indeterminate]="isSomeMembersSelected()"
+                                                    (change)="toggleSelectAllMembers($event)" />
+                                            </th>
+                                            <th class="py-2 px-3">Họ Tên, Username &amp; Email</th>
                                             <th class="py-2 px-3">Phòng/Ban</th>
                                             <th class="py-2 px-3 text-center">Elo</th>
                                             <th class="py-2 px-3 text-center">Hạng</th>
@@ -88,7 +104,16 @@ import { Router, ActivatedRoute } from '@angular/router';
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr *ngFor="let member of filteredMembers" class="border-b border-surface-100 hover:bg-surface-50">
+                                        <tr *ngFor="let member of filteredMembers"
+                                            class="border-b border-surface-100 hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors"
+                                            [class.bg-red-50]="selectedMemberIds.has(member.id)"
+                                            [class.dark:bg-red-950/20]="selectedMemberIds.has(member.id)">
+                                            <td class="py-2 px-3">
+                                                <input type="checkbox"
+                                                    class="w-4 h-4 cursor-pointer accent-primary"
+                                                    [checked]="selectedMemberIds.has(member.id)"
+                                                    (change)="toggleMemberSelection(member.id, $event)" />
+                                            </td>
                                             <td class="py-2 px-3">
                                                 <div class="font-semibold text-surface-900 dark:text-surface-0">{{ member.fullName }}</div>
                                                 <small class="text-primary font-semibold">&#64;{{ member.username || '-' }}</small>
@@ -102,12 +127,12 @@ import { Router, ActivatedRoute } from '@angular/router';
                                                 <p-tag [value]="member.isActive ? 'Active' : 'Pending'" [severity]="member.isActive ? 'success' : 'warn'" />
                                             </td>
                                             <td class="py-2 px-3 text-center">
-                                                <div class="flex items-center justify-center gap-2" *ngIf="!member.isActive">
+                                                <div class="flex items-center justify-center gap-1.5" *ngIf="!member.isActive">
                                                     <button class="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs" (click)="approveMember(member.id)">Duyệt</button>
                                                     <button class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs" (click)="rejectMember(member.id)">Từ chối</button>
                                                 </div>
-                                                <div class="flex items-center justify-center gap-2" *ngIf="member.isActive">
-                                                    <button class="px-2 py-1 border border-primary text-primary hover:bg-primary-50 dark:hover:bg-primary-950 rounded text-xs font-semibold" (click)="openOverrideDialog(member)">Điều chỉnh Elo/Hạng</button>
+                                                <div class="flex items-center justify-center gap-1.5" *ngIf="member.isActive">
+                                                    <button class="px-2 py-1 border border-primary text-primary hover:bg-primary-50 dark:hover:bg-primary-950 rounded text-xs font-semibold" (click)="openOverrideDialog(member)">Elo/Hạng</button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -127,6 +152,64 @@ import { Router, ActivatedRoute } from '@angular/router';
                                 <p-chart type="doughnut" [data]="rankChartData" [options]="rankChartOptions" class="w-full h-full" />
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== DIALOG: Thêm Thành Viên ===== -->
+            <div *ngIf="showAddMemberDialog" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" (click)="showAddMemberDialog = false"></div>
+                <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-6 z-10 border border-surface-200 dark:border-slate-700">
+                    <div class="flex items-center justify-between mb-5">
+                        <h3 class="text-xl font-bold flex items-center gap-2 m-0">
+                            <i class="pi pi-user-plus text-primary"></i> Thêm thành viên mới
+                        </h3>
+                        <button class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-100 dark:hover:bg-slate-800 text-surface-500 transition" (click)="showAddMemberDialog = false">
+                            <i class="pi pi-times"></i>
+                        </button>
+                    </div>
+
+                    <div class="space-y-4">
+                        <!-- Họ tên -->
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Họ tên <span class="text-red-500">*</span></label>
+                            <input pInputText type="text" class="w-full" placeholder="Nguyễn Văn A" [(ngModel)]="addMemberForm.fullName" />
+                        </div>
+                        <!-- Email -->
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Email <span class="text-red-500">*</span></label>
+                            <input pInputText type="email" class="w-full" placeholder="email@evnict.vn" [(ngModel)]="addMemberForm.email" />
+                        </div>
+                        <!-- Phòng/Ban + Giới tính -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm font-semibold mb-1">Phòng/Ban</label>
+                                <input pInputText type="text" class="w-full" placeholder="TTCNTT" [(ngModel)]="addMemberForm.department" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold mb-1">Giới tính</label>
+                                <select class="w-full px-3 py-2 border border-surface-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm" [(ngModel)]="addMemberForm.gender">
+                                    <option value="Nam">Nam</option>
+                                    <option value="Nữ">Nữ</option>
+                                </select>
+                            </div>
+                        </div>
+                        <!-- Số điện thoại -->
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Số điện thoại</label>
+                            <input pInputText type="tel" class="w-full" placeholder="0912345678" [(ngModel)]="addMemberForm.phone" />
+                        </div>
+                        <!-- Error message -->
+                        <p *ngIf="addMemberError" class="text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                            <i class="pi pi-exclamation-triangle"></i> {{ addMemberError }}
+                        </p>
+                    </div>
+
+                    <div class="flex justify-end gap-3 mt-6">
+                        <button class="px-4 py-2 border border-surface-300 dark:border-slate-600 hover:bg-surface-100 dark:hover:bg-slate-800 rounded-lg text-sm transition font-semibold" (click)="showAddMemberDialog = false">Hủy</button>
+                        <button class="px-4 py-2 bg-primary hover:bg-primary-600 text-white rounded-lg text-sm font-semibold flex items-center gap-2 transition" (click)="submitAddMember()">
+                            <i class="pi pi-check"></i> Thêm thành viên
+                        </button>
                     </div>
                 </div>
             </div>
@@ -569,28 +652,20 @@ import { Router, ActivatedRoute } from '@angular/router';
                                  
                                  <!-- Podium & Trophy Header (Only if drawn or finished) -->
                                  <div *ngIf="currTournament.status !== 'draft'" class="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-2xl p-6 shadow-xl relative overflow-hidden border border-indigo-950">
-                                     <!-- Ambient light effect -->
-                                     <div class="absolute -top-24 -left-24 w-48 h-48 bg-primary-500 rounded-full blur-3xl opacity-20"></div>
-                                     <div class="absolute -bottom-24 -right-24 w-48 h-48 bg-amber-500 rounded-full blur-3xl opacity-20"></div>
-
-                                     <div class="relative flex flex-col items-center">
-                                         <h4 class="text-sm uppercase tracking-widest text-amber-400 font-black mb-1">Bảng Vàng Danh Dự</h4>
-                                         <h3 class="text-xl font-extrabold text-slate-100 mb-6 text-center">BỤC VINH QUANG GIẢI ĐẤU</h3>
-
-                                         <!-- The 3D-styled Podium Layout -->
-                                         <div class="flex items-end justify-center w-full max-w-3xl mx-auto pt-6 pb-2 gap-6">
+                                     <!-- The 3D-styled Podium Layout -->
+                                         <div class="flex items-end justify-center w-full max-w-4xl mx-auto pt-6 pb-2 gap-3 md:gap-5 flex-wrap">
                                              
                                              <!-- 2nd Place: Left Column -->
-                                              <div class="flex flex-col items-center flex-1 min-w-[150px] max-w-[220px]">
+                                              <div class="flex flex-col items-center flex-1 min-w-[130px] max-w-[190px]">
                                                   <div class="text-center mb-3 w-full px-1">
                                                       <div class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-slate-800 border-2 border-slate-350 font-black text-xs text-slate-200 shadow-md mb-2">
                                                           2nd
                                                       </div>
                                                       <div class="text-xs font-bold text-slate-200 leading-tight">
-                                                          {{ getTopThreeWinners(currTournament).second?.name || 'Đang đấu...' }}
+                                                          {{ getPodiumWinners(currTournament).second?.name || 'Đang đấu...' }}
                                                       </div>
-                                                      <div *ngIf="currTournament.type === 'team' && getTopThreeWinners(currTournament).second?.id" class="text-[10px] text-slate-400 font-normal leading-snug mt-1 block">
-                                                          {{ getTeamPlayersText(getTopThreeWinners(currTournament).second?.id || '') }}
+                                                      <div *ngIf="currTournament.type === 'team' && getPodiumWinners(currTournament).second?.id" class="text-[10px] text-slate-400 font-normal leading-snug mt-1 block">
+                                                          {{ getTeamPlayersText(getPodiumWinners(currTournament).second?.id || '') }}
                                                       </div>
                                                   </div>
                                                  <!-- Podium block -->
@@ -598,25 +673,25 @@ import { Router, ActivatedRoute } from '@angular/router';
                                                      <div class="flex flex-col items-center px-1">
                                                          <i class="pi pi-medal text-xl text-slate-300"></i>
                                                          <span class="text-[10px] text-slate-200 font-bold mt-1">GIẢI NHÌ</span>
-                                                         <span class="text-[10px] text-amber-300 font-black mt-0.5" *ngIf="getPrizeForPodium(currTournament, 1)">
-                                                             {{ getPrizeForPodium(currTournament, 1) }}
+                                                         <span class="text-[10px] text-amber-300 font-black mt-0.5" *ngIf="getPrizeForPodium(currTournament, 'second')">
+                                                             {{ getPrizeForPodium(currTournament, 'second') }}
                                                          </span>
                                                      </div>
                                                  </div>
                                              </div>
 
                                              <!-- 1st Place: Center Column -->
-                                              <div class="flex flex-col items-center flex-1 min-w-[170px] max-w-[240px]">
+                                              <div class="flex flex-col items-center flex-1 min-w-[150px] max-w-[210px]">
                                                   <div class="text-center mb-3 w-full px-1 scale-105 transform">
                                                       <div class="inline-flex items-center justify-center w-11 h-11 rounded-full bg-amber-950 border-2 border-amber-400 font-black text-sm text-amber-400 shadow-lg relative mb-2">
                                                           <i class="pi pi-prime absolute -top-3 text-yellow-400 text-xs animate-bounce"></i>
                                                           1st
                                                       </div>
                                                       <div class="text-sm font-black text-amber-300 leading-tight">
-                                                          {{ getTopThreeWinners(currTournament).first?.name || 'Đang đấu...' }}
+                                                          {{ getPodiumWinners(currTournament).first?.name || 'Đang đấu...' }}
                                                       </div>
-                                                      <div *ngIf="currTournament.type === 'team' && getTopThreeWinners(currTournament).first?.id" class="text-[11px] text-amber-400 font-medium leading-snug mt-1 block">
-                                                          {{ getTeamPlayersText(getTopThreeWinners(currTournament).first?.id || '') }}
+                                                      <div *ngIf="currTournament.type === 'team' && getPodiumWinners(currTournament).first?.id" class="text-[11px] text-amber-400 font-medium leading-snug mt-1 block">
+                                                          {{ getTeamPlayersText(getPodiumWinners(currTournament).first?.id || '') }}
                                                       </div>
                                                   </div>
                                                  <!-- Podium block -->
@@ -625,35 +700,6 @@ import { Router, ActivatedRoute } from '@angular/router';
                                                      <div class="flex flex-col items-center px-1">
                                                          <i class="pi pi-trophy text-3xl text-yellow-350 drop-shadow"></i>
                                                          <span class="text-xs text-white font-black mt-1">VÔ ĐỊCH</span>
-                                                         <span class="text-xs text-yellow-250 font-black mt-0.5 animate-pulse" *ngIf="getPrizeForPodium(currTournament, 0)">
-                                                             {{ getPrizeForPodium(currTournament, 0) }}
-                                                         </span>
-                                                     </div>
-                                                 </div>
-                                             </div>
-
-                                             <!-- 3rd Place: Right Column -->
-                                              <div class="flex flex-col items-center flex-1 min-w-[150px] max-w-[220px]">
-                                                  <div class="text-center mb-3 w-full px-1">
-                                                      <div class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-orange-950 border-2 border-orange-650 font-black text-xs text-orange-400 shadow-md mb-2">
-                                                          3rd
-                                                      </div>
-                                                      <div class="text-xs font-bold text-orange-355 leading-tight">
-                                                          {{ getTopThreeWinners(currTournament).third?.name || 'Đang đấu...' }}
-                                                      </div>
-                                                      <div *ngIf="currTournament.type === 'team' && getTopThreeWinners(currTournament).third?.id" class="text-[10px] text-slate-400 font-normal leading-snug mt-1 block">
-                                                          {{ getTeamPlayersText(getTopThreeWinners(currTournament).third?.id || '') }}
-                                                      </div>
-</div>
-                                                 <!-- Podium block -->
-                                                 <div class="w-full h-16 bg-gradient-to-t from-orange-800/80 to-amber-750/80 border border-orange-650 rounded-t-xl flex items-center justify-center shadow-lg text-center">
-                                                     <div class="flex flex-col items-center px-1">
-                                                         <i class="pi pi-medal text-xl text-orange-400"></i>
-                                                         <span class="text-[10px] text-orange-200 font-bold mt-1">GIẢI BA</span>
-                                                         <span class="text-[10px] text-amber-300 font-black mt-0.5" *ngIf="getPrizeForPodium(currTournament, 2)">
-                                                             {{ getPrizeForPodium(currTournament, 2) }}
-                                                         </span>
-                                                     </div>
                                                  </div>
                                              </div>
 
@@ -801,7 +847,7 @@ import { Router, ActivatedRoute } from '@angular/router';
                                   </div>
 
                                   <!-- Section 1: Unified Registered VĐV & Seeding Table -->
-                                  <div class="card shadow-sm border border-surface-200 p-4">
+                                  <div *ngIf="!currTournament.groups || currTournament.groups.length === 0" class="card shadow-sm border border-surface-200 p-4">
                                       <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
                                           <h4 class="text-base font-bold flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
                                               <i class="pi pi-users text-primary"></i> 1. Danh sách VĐV & Thứ tự hạt giống
@@ -897,90 +943,124 @@ import { Router, ActivatedRoute } from '@angular/router';
                                   <!-- Section 2: Teams assignment section (only for Double / Team formats) -->
                                   <div *ngIf="currTournament.type === 'team' || currTournament.type === 'double'" class="space-y-4">
                                       
-                                      <!-- Sub-state A: Teams generated but groups NOT drawn yet -->
-                                      <div *ngIf="currTournament.teams && currTournament.teams.length > 0 && (!currTournament.groups || currTournament.groups.length === 0)">
-                                          <div class="flex items-center justify-between mb-3 border-b pb-2">
-                                              <h4 class="text-base font-bold flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
-                                                  <i class="pi pi-users text-primary"></i> 2. Danh sách các đội đã phân chia
-                                              </h4>
-                                              <div class="flex items-center gap-2">
-                                                  <button *ngIf="currTournament.status === 'draft'" class="px-3 py-1.5 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700 rounded text-xs font-bold hover:bg-red-100 transition flex items-center gap-1" (click)="clearTeams()">
-                                                      <i class="pi pi-trash"></i> Hủy đội hình
-                                                  </button>
-                                                  <button *ngIf="currTournament.status === 'draft'" class="px-3.5 py-2 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 transition shadow-sm flex items-center gap-1" [disabled]="(currTournament.participants?.length || 0) < 4" (click)="drawTournament(currTournament.id)">
-                                                      <i class="pi pi-sitemap"></i> Bốc Thăm Chia Bảng
-                                                  </button>
-                                              </div>
-                                          </div>
-
-                                          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                              <div *ngFor="let team of currTournament.teams" class="p-3.5 border rounded-xl bg-surface-50 dark:bg-slate-900/60 shadow-sm space-y-3">
-                                                  <div class="font-extrabold text-sm text-indigo-600 flex justify-between items-center border-b pb-1.5">
-                                                      <span>{{ team.name }}</span>
-                                                      <span class="text-xxs px-2 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 rounded-full font-bold">Đội đồng bộ</span>
-                                                  </div>
-                                                  <div class="space-y-2">
-                                                      <div *ngFor="let p of team.players; let pIdx = index" class="flex justify-between items-center text-xs">
-                                                          <span class="font-semibold flex items-center" [class.text-primary]="pIdx === 0" [class.font-bold]="pIdx === 0">
-                                                              <i class="pi" [class.pi-star-fill]="pIdx === 0" [class.text-amber-500]="pIdx === 0" [class.pi-user]="pIdx > 0" [class.text-slate-400]="pIdx > 0" class="mr-1.5 text-xs"></i>
-                                                              {{ p.name }} <span class="text-slate-450 font-normal ml-1">(Hạng {{ getMemberRank(p.id) }})</span>
-                                                          </span>
-                                                          <span class="text-[10px] px-1.5 py-0.2 rounded font-bold" [class.bg-amber-100]="pIdx === 0" [class.text-amber-800]="pIdx === 0" [class.bg-slate-100]="pIdx > 0" [class.text-slate-500]="pIdx > 0">
-                                                              {{ pIdx === 0 ? 'Đội trưởng' : 'Thành viên' }}
-                                                          </span>
-                                                      </div>
-                                                  </div>
-                                              </div>
-                                          </div>
-                                      </div>
-
-                                      <!-- Sub-state B: Groups drawn -->
-                                      <div *ngIf="currTournament.groups && currTournament.groups.length > 0" class="space-y-4">
+                                      <!-- Teams list (when teams are generated) -->
+                                       <div *ngIf="currTournament.teams && currTournament.teams.length > 0" class="space-y-4">
                                            <div class="flex items-center justify-between mb-3 border-b pb-2">
                                                <h4 class="text-base font-bold flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
-                                                   <i class="pi pi-sitemap text-primary"></i> 2. Kết quả phân bảng thi đấu các đội
+                                                   <i class="pi pi-users text-primary"></i> 2. Danh sách các đội đã phân chia
                                                </h4>
-                                               <div class="flex items-center gap-2 flex-wrap">
+                                               <div class="flex items-center gap-2">
                                                    <button *ngIf="currTournament.status === 'draft'" class="px-3 py-1.5 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700 rounded text-xs font-bold hover:bg-red-100 transition flex items-center gap-1" (click)="clearTeams()">
                                                        <i class="pi pi-trash"></i> Hủy đội hình
                                                    </button>
-                                                   <button *ngIf="currTournament.status === 'draft'" class="px-3 py-1.5 bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded text-xs font-bold hover:bg-amber-200 transition flex items-center gap-1" (click)="drawTournament(currTournament.id)">
-                                                       <i class="pi pi-sync"></i> Chia lại bảng
+                                                   <button *ngIf="currTournament.status === 'draft' && (!currTournament.groups || currTournament.groups.length === 0)" class="px-3.5 py-2 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 transition shadow-sm flex items-center gap-1" [disabled]="(currTournament.participants?.length || 0) < 4" (click)="drawTournament(currTournament.id)">
+                                                       <i class="pi pi-sitemap"></i> Bốc Thăm Chia Bảng
                                                    </button>
-                                                   <button *ngIf="currTournament.status === 'ongoing' && currTournament.type === 'team'" class="px-2.5 py-1 bg-white text-primary border border-primary/30 rounded text-xxs font-bold hover:bg-primary/5 transition" (click)="toggleManualRestructureMode()">
-                                                       {{ showManualRestructure ? 'Ẩn chỉnh tay' : 'Chỉnh tay kéo-thả' }}
-                                                   </button>
-                                                   <div class="text-xxs px-2.5 py-1 bg-green-50 text-green-700 border border-green-200 rounded-full font-extrabold flex items-center gap-1">
-                                                       <i class="pi pi-check"></i> ĐÃ CHIA BẢNG THÀNH CÔNG
-                                                   </div>
                                                </div>
                                            </div>
-                                           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                               <div *ngFor="let g of currTournament.groups" class="p-4 border border-surface-200 rounded-xl bg-surface-50 dark:bg-surface-800 shadow-inner space-y-3">
-                                                   <div class="font-black text-sm text-primary pb-1.5 border-b border-surface-200 flex justify-between items-center">
-                                                       <span>BẢNG {{ g.groupName }}</span>
-                                                       <span class="text-xxs px-2.5 py-0.5 bg-primary/10 text-primary rounded-full font-bold">Vòng loại</span>
+
+                                           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                               <div *ngFor="let team of currTournament.teams" class="p-3.5 border rounded-xl bg-surface-50 dark:bg-slate-900/60 shadow-sm space-y-3">
+                                                   <div class="font-extrabold text-sm text-indigo-600 flex justify-between items-center border-b pb-1.5">
+                                                       <div class="flex items-center gap-2">
+                                                           <span>{{ team.name }}</span>
+                                                           <span class="text-[10px] bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 px-1.5 py-0.2 rounded font-bold">Tổng Seed: {{ getTeamSeedTotal(team) }}</span>
+                                                       </div>
+                                                       <span class="text-xxs px-2 py-0.5 rounded-full font-bold" 
+                                                             [class.bg-indigo-50]="!getTeamGroupName(team.id)"
+                                                             [class.text-indigo-700]="!getTeamGroupName(team.id)"
+                                                             [class.bg-emerald-50]="getTeamGroupName(team.id)"
+                                                             [class.text-emerald-700]="getTeamGroupName(team.id)"
+                                                             [class.dark:bg-emerald-950/40]="getTeamGroupName(team.id)"
+                                                             [class.dark:text-emerald-400]="getTeamGroupName(team.id)">
+                                                           {{ getTeamGroupName(team.id) || 'Đội đồng bộ' }}
+                                                       </span>
                                                    </div>
                                                    <div class="space-y-2">
-                                                       <div *ngFor="let comp of g.competitors"
-                                                            [title]="getTeamPlayersText(comp.id) ? ('Thành viên: ' + getTeamPlayersText(comp.id)) : comp.name"
-                                                            class="p-3 bg-white dark:bg-slate-900 border border-surface-200 rounded-lg flex flex-col gap-2 shadow-sm hover:border-primary/40 transition-colors">
-                                                           <div class="flex items-center justify-between gap-2 font-bold text-xs text-slate-800 dark:text-slate-200">
-                                                               <div class="flex items-center gap-2">
-                                                                   <i class="pi pi-shield text-slate-400 text-xs"></i>
-                                                                   <span>{{ comp.name }}</span>
-                                                               </div>
-                                                               <span *ngIf="getTeamPlayersText(comp.id)" class="text-[10px] font-normal text-slate-400">
-                                                                   {{ getTeamPlayersText(comp.id) }}
-                                                               </span>
-                                                           </div>
+                                                       <div *ngFor="let p of team.players; let pIdx = index" class="flex justify-between items-center text-xs">
+                                                           <span class="font-semibold flex items-center" [class.text-primary]="pIdx === 0" [class.font-bold]="pIdx === 0">
+                                                               <i class="pi" [class.pi-star-fill]="pIdx === 0" [class.text-amber-500]="pIdx === 0" [class.pi-user]="pIdx > 0" [class.text-slate-400]="pIdx > 0" class="mr-1.5 text-xs"></i>
+                                                               {{ p.name }} <span class="text-slate-450 font-normal ml-1">(Hạng {{ getMemberRank(p.id) }})</span>
+                                                           </span>
+                                                           <span class="text-[10px] px-1.5 py-0.2 rounded font-bold" [class.bg-amber-100]="pIdx === 0" [class.text-amber-800]="pIdx === 0" [class.bg-slate-100]="pIdx > 0" [class.text-slate-500]="pIdx > 0">
+                                                               {{ pIdx === 0 ? 'Đội trưởng' : 'Thành viên' }}
+                                                           </span>
                                                        </div>
                                                    </div>
                                                </div>
                                            </div>
                                        </div>
 
-                                      <!-- Sub-state C: Draft tournament, no teams created yet -->
+                                       <!-- 3. Groups list -->
+                                       <div *ngIf="currTournament.groups && currTournament.groups.length > 0" class="space-y-4 pt-6 border-t border-dashed border-slate-200 dark:border-slate-800">
+                                            <div class="flex items-center justify-between mb-3 border-b pb-2">
+                                                <h4 class="text-base font-bold flex items-center gap-2 m-0 text-slate-800 dark:text-slate-100">
+                                                    <i class="pi pi-sitemap text-primary"></i> 3. Kết quả phân bảng thi đấu các đội
+                                                </h4>
+                                                <div class="flex items-center gap-2 flex-wrap">
+                                                    <button *ngIf="currTournament.status === 'draft'" class="px-3 py-1.5 bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded text-xs font-bold hover:bg-amber-200 transition flex items-center gap-1" (click)="drawTournament(currTournament.id)">
+                                                        <i class="pi pi-sync"></i> Chia lại bảng
+                                                    </button>
+                                                    <button *ngIf="currTournament.status === 'ongoing' && currTournament.type === 'team'" class="px-2.5 py-1 bg-white text-primary border border-primary/30 rounded text-xxs font-bold hover:bg-primary/5 transition" (click)="toggleManualRestructureMode()">
+                                                        {{ showManualRestructure ? 'Ẩn chỉnh tay' : 'Chỉnh tay kéo-thả' }}
+                                                    </button>
+                                                    <div class="text-xxs px-2.5 py-1 bg-green-50 text-green-700 border border-green-200 rounded-full font-extrabold flex items-center gap-1">
+                                                        <i class="pi pi-check"></i> ĐÃ CHIA BẢNG THÀNH CÔNG
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Manual restructure (drag and drop) -->
+                                            <div *ngIf="showManualRestructure" class="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900 rounded-xl space-y-3">
+                                                 <div class="text-[11px] text-slate-500 font-medium">Kéo thả các đội giữa các bảng đấu để điều chỉnh thủ công nếu cần thiết:</div>
+                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                     <div *ngFor="let g of currTournament.groups" 
+                                                          class="p-3 bg-white dark:bg-slate-900 border border-indigo-200/60 dark:border-indigo-900/60 rounded-lg min-h-[150px] space-y-2"
+                                                          (dragover)="allowDrop($event)"
+                                                          (drop)="onDropCompetitorToGroup($event, g.groupName)">
+                                                         <div class="font-bold text-xs text-indigo-700 dark:text-indigo-400 border-b pb-1">BẢNG {{ g.groupName }}</div>
+                                                         <div class="space-y-1.5">
+                                                             <div *ngFor="let comp of g.competitors"
+                                                                  draggable="true"
+                                                                  (dragstart)="onCompetitorDragStart(g.groupName, comp.id)"
+                                                                  class="p-2 bg-slate-50 dark:bg-slate-800 border rounded cursor-grab hover:bg-slate-100 transition text-xs font-semibold flex items-center justify-between">
+                                                                 <span>{{ comp.name }}</span>
+                                                                 <i class="pi pi-bars text-slate-400 text-xxs"></i>
+                                                             </div>
+                                                         </div>
+                                                     </div>
+                                                 </div>
+                                            </div>
+
+                                            <div *ngIf="!showManualRestructure" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div *ngFor="let g of currTournament.groups" class="p-4 border border-surface-200 rounded-xl bg-surface-50 dark:bg-surface-800 shadow-inner space-y-3">
+                                                    <div class="font-black text-sm text-primary pb-1.5 border-b border-surface-200 flex justify-between items-center">
+                                                        <div class="flex items-center gap-2">
+                                                            <span>BẢNG {{ g.groupName }}</span>
+                                                            <span class="text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.2 rounded">Seed TB: {{ getGroupAverageSeed(g) }}</span>
+                                                        </div>
+                                                        <span class="text-xxs px-2.5 py-0.5 bg-primary/10 text-primary rounded-full font-bold">Vòng loại</span>
+                                                    </div>
+                                                    <div class="space-y-2">
+                                                        <div *ngFor="let comp of g.competitors"
+                                                             [title]="getTeamPlayersText(comp.id) ? ('Thành viên: ' + getTeamPlayersText(comp.id)) : comp.name"
+                                                             class="p-3 bg-white dark:bg-slate-900 border border-surface-200 rounded-lg flex flex-col gap-2 shadow-sm hover:border-primary/40 transition-colors">
+                                                            <div class="flex items-center justify-between gap-2 font-bold text-xs text-slate-800 dark:text-slate-200">
+                                                                <div class="flex items-center gap-2">
+                                                                    <i class="pi pi-shield text-slate-400 text-xs"></i>
+                                                                    <span>{{ comp.name }}</span>
+                                                                </div>
+                                                                <span *ngIf="getTeamPlayersText(comp.id)" class="text-[10px] font-normal text-slate-400">
+                                                                    {{ getTeamPlayersText(comp.id) }}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                       </div>
+
+                                       <!-- Sub-state C: Draft tournament, no teams created yet -->
                                       <div *ngIf="(!currTournament.teams || currTournament.teams.length === 0) && currTournament.status === 'draft'" class="space-y-4">
 
                                           <!-- Manual Slot Builder Card -->
@@ -1161,7 +1241,10 @@ import { Router, ActivatedRoute } from '@angular/router';
                                           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                               <div *ngFor="let g of currTournament.groups" class="p-4 border border-surface-200 rounded-xl bg-surface-50 dark:bg-surface-800 shadow-inner space-y-3">
                                                   <div class="font-black text-sm text-primary pb-1.5 border-b border-surface-200 flex justify-between items-center">
-                                                      <span>BẢNG {{ g.groupName }}</span>
+                                                      <div class="flex items-center gap-2">
+                                                           <span>BẢNG {{ g.groupName }}</span>
+                                                           <span class="text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.2 rounded">Seed TB: {{ getGroupAverageSeed(g) }}</span>
+                                                       </div>
                                                       <span class="text-xxs px-2.5 py-0.5 bg-primary/10 text-primary rounded-full font-bold">Vòng loại</span>
                                                   </div>
                                                   <div class="space-y-2">
@@ -1240,7 +1323,7 @@ import { Router, ActivatedRoute } from '@angular/router';
                                                           <ul class="list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-400 m-0">
                                                               <li *ngFor="let g of rev.groups">
                                                                   <strong>Bảng {{ g.groupName }}:</strong>
-                                                                  <span>{{ getCompetitorNamesJoined(g.competitorIds) }}</span>
+                                                                  <span>{{ getCompetitorNamesJoined(g.competitorIds) }}</span><span class="ml-1 text-[10px] bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-1 rounded font-bold">Seed TB: {{ getRevisionGroupAverageSeed(rev, g) }}</span>
                                                               </li>
                                                           </ul>
                                                       </div>
@@ -1466,6 +1549,17 @@ import { Router, ActivatedRoute } from '@angular/router';
                                         <i class="pi pi-table text-primary"></i> Bảng Điểm Live & Trạng Thái Suất Đi Tiếp
                                     </h4>
                                     <div *ngFor="let standing of currTournament.standings" class="mb-4">
+                                        <!-- Tie warning banner & manual lot draw button -->
+                                        <div *ngIf="standing.hasTie" class="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-lg flex items-center justify-between gap-3 mb-2 shadow-sm">
+                                            <div class="flex items-center gap-2 text-amber-800 dark:text-amber-300 text-xs font-bold">
+                                                <i class="pi pi-exclamation-triangle text-amber-600 text-sm animate-pulse"></i>
+                                                <span>Bảng {{ standing.groupName }} hòa chỉ số tuyệt đối (Điểm, Hiệu số trận, Hiệu số séc, Đối đầu đều bằng nhau). Cần bốc thăm để phân thứ hạng!</span>
+                                            </div>
+                                            <button type="button" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold transition flex items-center gap-1.5 border-none cursor-pointer shadow-sm flex-shrink-0" (click)="drawGroupTieBreakLot(currTournament.id, standing.groupName)">
+                                                <i class="pi pi-ticket"></i> Bốc Thăm Thứ Hạng
+                                            </button>
+                                        </div>
+
                                         <h5 class="font-bold text-xs bg-slate-100 dark:bg-slate-800 p-2 rounded mb-2 flex items-center justify-between">
                                             <span>Bảng {{ standing.groupName }}</span>
                                             <span class="text-[10px] text-indigo-600 font-bold bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded">Vòng loại</span>
@@ -1488,12 +1582,13 @@ import { Router, ActivatedRoute } from '@angular/router';
                                                         [class.bg-green-50/40]="row.rank <= 2" [class.dark:bg-green-950/10]="row.rank <= 2"
                                                         [class.bg-red-50/5]="row.rank > 2" [class.dark:bg-red-950/5]="row.rank > 2">
                                                         <td class="py-2.5 px-3 text-center font-extrabold" [class.text-green-600]="row.rank <= 2" [class.text-slate-400]="row.rank > 2">{{ row.rank }}</td>
-                                                        <td class="py-2.5 px-3 font-bold flex items-center">
+                                                        <td class="py-2.5 px-3 font-bold flex items-center flex-wrap gap-1">
                                                             <span [class.text-green-700]="row.rank <= 2" [class.dark:text-green-400]="row.rank <= 2" [class.text-slate-400]="row.rank > 2" [class.line-through]="row.rank > 2">
                                                                 {{ row.competitor.name }}
                                                             </span>
                                                             <span *ngIf="row.rank <= 2" class="ml-2 text-[9px] font-bold bg-green-100 text-green-700 dark:bg-green-900/60 dark:text-green-300 px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><i class="pi pi-check text-[8px]"></i>Đi Tiếp</span>
                                                             <span *ngIf="row.rank > 2" class="ml-2 text-[9px] font-bold bg-red-50 text-red-500 dark:bg-red-950/60 dark:text-red-400 px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><i class="pi pi-times text-[8px]"></i>Bị Loại</span>
+                                                            <span *ngIf="row.tieBreakLot !== undefined" class="text-[9px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 px-1.5 py-0.5 rounded-full flex items-center gap-0.5" title="Xếp hạng được quyết định bằng bốc thăm ngẫu nhiên"><i class="pi pi-ticket text-[8px]"></i>Bốc thăm</span>
                                                         </td>
                                                         <td class="py-2.5 px-3 text-center" [class.text-slate-400]="row.rank > 2">{{ row.played }}</td>
                                                         <td class="py-2.5 px-3 text-center text-green-600 font-medium" [class.text-slate-400]="row.rank > 2">{{ row.won }}</td>
@@ -2281,6 +2376,20 @@ export class AdminPortal implements OnInit {
     memberDepartmentSearch = '';
     adminUserId = 'u01';
 
+    // Bulk member selection
+    selectedMemberIds: Set<string> = new Set<string>();
+
+    // Add Member dialog
+    showAddMemberDialog = false;
+    addMemberForm = {
+        fullName: '',
+        email: '',
+        department: '',
+        gender: 'Nam',
+        phone: ''
+    };
+    addMemberError = '';
+
     members: Member[] = [];
     activeMembers: Member[] = [];
     recentMatches: MatchRecord[] = [];
@@ -2575,62 +2684,74 @@ export class AdminPortal implements OnInit {
         return tournament.id;
     }
 
-    getTopThreeWinners(t: Tournament): { first?: { id: string, name: string }, second?: { id: string, name: string }, third?: { id: string, name: string } } {
-        if (!t) return {};
+    getPodiumWinners(t: Tournament): { first?: { id: string, name: string }, second?: { id: string, name: string }, third?: { id: string, name: string }, third2?: { id: string, name: string }, hasTwoThirds: boolean } {
+        if (!t) return { hasTwoThirds: false };
         
-        // If round_robin
+        const getCompObj = (id: string): { id: string, name: string } => {
+            const m = this.dataService.getMemberById(id);
+            if (m) return { id, name: m.fullName };
+            const team = t.teams?.find((tm: any) => tm.id === id);
+            return { id, name: team ? team.name : id };
+        };
+
         if (t.format === 'round_robin') {
             const std = t.standings || [];
             const rows = std[0] ? std[0].rows : [];
+            const hasTwo3rdPrizes = (t.prizes || []).filter(p => (p.title || '').toLowerCase().includes('ba')).length >= 2;
             return {
                 first: rows[0] ? { id: rows[0].competitor.id, name: rows[0].competitor.name } : undefined,
                 second: rows[1] ? { id: rows[1].competitor.id, name: rows[1].competitor.name } : undefined,
-                third: rows[2] ? { id: rows[2].competitor.id, name: rows[2].competitor.name } : undefined
+                third: rows[2] ? { id: rows[2].competitor.id, name: rows[2].competitor.name } : undefined,
+                third2: hasTwo3rdPrizes && rows[3] ? { id: rows[3].competitor.id, name: rows[3].competitor.name } : undefined,
+                hasTwoThirds: hasTwo3rdPrizes && !!rows[3]
             };
         }
 
-        // If knockout
         const matches = t.knockoutMatches || [];
         const finalMatch = matches.find(m => m.roundName === 'Finals');
         
         let first: { id: string, name: string } | undefined;
         let second: { id: string, name: string } | undefined;
         let third: { id: string, name: string } | undefined;
+        let third2: { id: string, name: string } | undefined;
+        let hasTwoThirds = false;
 
-        if (finalMatch && finalMatch.homeScore !== undefined && finalMatch.awayScore !== undefined && finalMatch.winnerId !== undefined) {
-            const getCompObj = (id: string): { id: string, name: string } => {
-                const m = this.dataService.getMemberById(id);
-                if (m) return { id, name: m.fullName };
-                const team = t.teams?.find((tm: any) => tm.id === id);
-                return { id, name: team ? team.name : id };
-            };
-
+        if (finalMatch && finalMatch.winnerId !== undefined) {
             const winnerId = finalMatch.winnerId;
             const loserId = winnerId === finalMatch.homeCompetitorId ? finalMatch.awayCompetitorId : finalMatch.homeCompetitorId;
 
             first = getCompObj(winnerId);
             second = getCompObj(loserId);
 
-            // Third place check
             const bronzeMatch = matches.find(m => m.roundName === 'Bronze' || m.id === '3rd-1');
             if (bronzeMatch && bronzeMatch.winnerId !== undefined) {
                 third = getCompObj(bronzeMatch.winnerId);
+                hasTwoThirds = false;
             } else {
                 const semiMatches = matches.filter(m => m.roundName === 'Semifinals');
                 const losers: string[] = [];
                 semiMatches.forEach(m => {
-                    if (m.homeScore !== undefined && m.awayScore !== undefined && m.winnerId !== undefined) {
+                    if (m.winnerId !== undefined) {
                         const lId = m.winnerId === m.homeCompetitorId ? m.awayCompetitorId : m.homeCompetitorId;
-                        losers.push(lId);
+                        if (lId) losers.push(lId);
                     }
                 });
                 if (losers.length > 0) {
                     third = getCompObj(losers[0]);
                 }
+                if (losers.length > 1) {
+                    third2 = getCompObj(losers[1]);
+                    hasTwoThirds = true;
+                }
             }
         }
 
-        return { first, second, third };
+        return { first, second, third, third2, hasTwoThirds };
+    }
+
+    getTopThreeWinners(t: Tournament): { first?: { id: string, name: string }, second?: { id: string, name: string }, third?: { id: string, name: string } } {
+        const res = this.getPodiumWinners(t);
+        return { first: res.first, second: res.second, third: res.third };
     }
 
     getTeamPlayersText(teamId: string): string {
@@ -2640,31 +2761,26 @@ export class AdminPortal implements OnInit {
         return team.players.map(p => p.name).join(', ');
     }
 
-    getCompletedMatchesCount(t: Tournament): number {
-        if (!t || !t.scores) return 0;
-        const groupCompleted = t.scores.filter(m => m.completed || (m.homeScore !== 0 || m.awayScore !== 0)).length;
-        const knockoutCompleted = (t.knockoutMatches || []).filter(m => m.completed || (m.homeScore !== undefined && m.awayScore !== undefined)).length;
-        return groupCompleted + knockoutCompleted;
-    }
-
-    getTotalMatchesCount(t: Tournament): number {
-        if (!t) return 0;
-        const groupTotal = t.scores ? t.scores.length : 0;
-        const knockoutTotal = t.knockoutMatches ? t.knockoutMatches.length : 0;
-        return groupTotal + knockoutTotal;
-    }
-
-    getTournamentProgressPercent(t: Tournament): number {
-        const total = this.getTotalMatchesCount(t);
-        if (total === 0) return 0;
-        const completed = this.getCompletedMatchesCount(t);
-        return Math.round((completed / total) * 100);
-    }
-
-    getPrizeForPodium(t: Tournament, index: number): string {
-        if (!t || !t.prizes || !t.prizes[index]) return '';
-        const p = t.prizes[index];
-        return `${p.amount.toLocaleString()}đ`;
+    getPrizeForPodium(t: Tournament, indexOrKey: number | 'first' | 'second' | 'third'): string {
+        if (!t || !t.prizes || t.prizes.length === 0) return '';
+        if (typeof indexOrKey === 'number') {
+            const p = t.prizes[indexOrKey];
+            return p ? `${p.amount.toLocaleString()}đ` : '';
+        }
+        const prizes = t.prizes;
+        if (indexOrKey === 'first') {
+            const found = prizes.find(p => /vô địch|nhất|1/i.test(p.title)) || prizes[0];
+            return found ? `${found.amount.toLocaleString()}đ` : '';
+        }
+        if (indexOrKey === 'second') {
+            const found = prizes.find(p => /nhì|2/i.test(p.title)) || prizes[1];
+            return found ? `${found.amount.toLocaleString()}đ` : '';
+        }
+        if (indexOrKey === 'third') {
+            const found = prizes.find(p => /ba|3/i.test(p.title)) || prizes[2] || prizes[prizes.length - 1];
+            return found ? `${found.amount.toLocaleString()}đ` : '';
+        }
+        return '';
     }
 
     isSetScoreValid(home: number | null | undefined, away: number | null | undefined): { valid: boolean, error?: string } {
@@ -2871,7 +2987,83 @@ export class AdminPortal implements OnInit {
 
     rejectMember(memberId: string): void {
         this.dataService.rejectMember(memberId, this.adminUserId);
+        this.selectedMemberIds.delete(memberId);
         this.reloadAll();
+    }
+
+    // --- Bulk member selection ---
+    toggleMemberSelection(memberId: string, event: Event): void {
+        const checked = (event.target as HTMLInputElement).checked;
+        if (checked) {
+            this.selectedMemberIds.add(memberId);
+        } else {
+            this.selectedMemberIds.delete(memberId);
+        }
+    }
+
+    toggleSelectAllMembers(event: Event): void {
+        const checked = (event.target as HTMLInputElement).checked;
+        if (checked) {
+            this.filteredMembers.forEach(m => this.selectedMemberIds.add(m.id));
+        } else {
+            this.filteredMembers.forEach(m => this.selectedMemberIds.delete(m.id));
+        }
+    }
+
+    isAllMembersSelected(): boolean {
+        return this.filteredMembers.length > 0 && this.filteredMembers.every(m => this.selectedMemberIds.has(m.id));
+    }
+
+    isSomeMembersSelected(): boolean {
+        return this.selectedMemberIds.size > 0 && !this.isAllMembersSelected();
+    }
+
+    clearMemberSelection(): void {
+        this.selectedMemberIds.clear();
+    }
+
+    deleteSelectedMembers(): void {
+        const ids = [...this.selectedMemberIds];
+        if (ids.length === 0) return;
+        const confirmed = window.confirm(`Bạn có chắc muốn xóa ${ids.length} thành viên đã chọn? Hành động này không thể hoàn tác.`);
+        if (!confirmed) return;
+        ids.forEach(id => this.dataService.deleteMember(id, this.adminUserId));
+        this.selectedMemberIds.clear();
+        this.reloadAll();
+    }
+
+    // --- Add Member dialog ---
+    openAddMemberDialog(): void {
+        this.addMemberForm = { fullName: '', email: '', department: '', gender: 'Nam', phone: '' };
+        this.addMemberError = '';
+        this.showAddMemberDialog = true;
+    }
+
+    submitAddMember(): void {
+        this.addMemberError = '';
+        if (!this.addMemberForm.fullName.trim()) {
+            this.addMemberError = 'Vui lòng nhập họ tên.';
+            return;
+        }
+        if (!this.addMemberForm.email.trim()) {
+            this.addMemberError = 'Vui lòng nhập email.';
+            return;
+        }
+        try {
+            const newMember = this.dataService.registerMember({
+                fullName: this.addMemberForm.fullName.trim(),
+                email: this.addMemberForm.email.trim(),
+                department: this.addMemberForm.department.trim() || 'N/A',
+                gender: this.addMemberForm.gender,
+                phone: this.addMemberForm.phone.trim()
+            });
+            // Auto-approve since admin is adding directly
+            this.dataService.approveMember(newMember.id, this.adminUserId);
+            this.showAddMemberDialog = false;
+            this.reloadAll();
+        } catch (err: any) {
+            this.addMemberError = err.message || 'Lỗi khi thêm thành viên.';
+        }
     }
 
     openOverrideDialog(member: Member): void {
@@ -3916,6 +4108,49 @@ export class AdminPortal implements OnInit {
         return reg?.seed ?? null;
     }
 
+    getTeamSeedTotal(team: any): number {
+        if (!team || !team.players) return 0;
+        return team.players.reduce((sum: number, p: any) => sum + (this.getRegSeed(p.id) || 0), 0);
+    }
+
+    getTeamGroupName(teamId: string): string {
+        if (!this.currTournament || !this.currTournament.groups) return '';
+        const group = this.currTournament.groups.find((g: any) => g.competitors?.some((c: any) => c.id === teamId));
+        return group ? `Bảng ${group.groupName}` : '';
+    }
+
+    getCompetitorSeed(competitorId: string): number {
+        if (!this.currTournament) return 0;
+        if (this.currTournament.type === 'single') {
+            return this.getRegSeed(competitorId) || 0;
+        } else {
+            const team = this.currTournament.teams?.find((t: any) => t.id === competitorId);
+            return this.getTeamSeedTotal(team);
+        }
+    }
+
+    getGroupAverageSeed(group: any): number {
+        if (!group || !group.competitors || group.competitors.length === 0) return 0;
+        const totalSeed = group.competitors.reduce((sum: number, comp: any) => sum + this.getCompetitorSeed(comp.id), 0);
+        return Math.round((totalSeed / group.competitors.length) * 10) / 10;
+    }
+
+    getRevisionGroupAverageSeed(rev: any, g: any): number {
+        if (!g || !g.competitorIds || g.competitorIds.length === 0) return 0;
+        let totalSeed = 0;
+        for (const cid of g.competitorIds) {
+            if (this.currTournament?.type === 'single') {
+                totalSeed += this.getRegSeed(cid) || 0;
+            } else {
+                const revTeam = rev.teams?.find((t: any) => t.teamId === cid);
+                if (revTeam) {
+                    totalSeed += revTeam.seedTotal || 0;
+                }
+            }
+        }
+        return Math.round((totalSeed / g.competitorIds.length) * 10) / 10;
+    }
+
     getSortedParticipants(): string[] {
         if (!this.currTournament || !this.currTournament.participants) return [];
         return [...this.currTournament.participants].sort((a, b) => {
@@ -4065,6 +4300,14 @@ export class AdminPortal implements OnInit {
         }
         this.dataService.generateKnockoutStage(tournamentId);
         this.reloadAll();
+    }
+
+    drawGroupTieBreakLot(tournamentId: string, groupName: string): void {
+        const ok = this.dataService.drawGroupTieBreakLot(tournamentId, groupName);
+        if (ok) {
+            this.openMessageDialog(`Đã thực hiện bốc thăm thứ hạng cho Bảng ${groupName} thành công! 🎉`);
+            this.reloadAll();
+        }
     }
 
     saveKnockoutScore(tournamentId: string, matchId: string, homeScore: number, awayScore: number): void {
@@ -4263,6 +4506,27 @@ export class AdminPortal implements OnInit {
         }
 
         return list;
+    }
+
+    getCompletedMatchesCount(t: Tournament): number {
+        if (!t || !t.scores) return 0;
+        const groupCompleted = t.scores.filter(m => m.completed || (m.homeScore !== 0 || m.awayScore !== 0)).length;
+        const knockoutCompleted = (t.knockoutMatches || []).filter(m => m.completed || (m.homeScore !== undefined && m.awayScore !== undefined)).length;
+        return groupCompleted + knockoutCompleted;
+    }
+
+    getTotalMatchesCount(t: Tournament): number {
+        if (!t) return 0;
+        const groupTotal = t.scores ? t.scores.length : 0;
+        const knockoutTotal = t.knockoutMatches ? t.knockoutMatches.length : 0;
+        return groupTotal + knockoutTotal;
+    }
+
+    getTournamentProgressPercent(t: Tournament): number {
+        const total = this.getTotalMatchesCount(t);
+        if (total === 0) return 0;
+        const completed = this.getCompletedMatchesCount(t);
+        return Math.round((completed / total) * 100);
     }
 
     private reloadAll(): void {

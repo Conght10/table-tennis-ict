@@ -177,7 +177,7 @@ export class EvnictDataService {
         return 'A6';
     }
 
-    private readonly apiUrl = 'http://localhost:8084/api';
+    private readonly apiUrl = 'https://table-tennis-ict-production-9f29.up.railway.app/api';
     private readonly defaultDrawRules: TournamentDrawRuleConfig = {
         useSeededDraw: true,
         lockRankDuringTournament: true,
@@ -545,10 +545,18 @@ export class EvnictDataService {
             const member = this.getMemberById(registration.memberId);
             registration.seed = Math.max(1, Number(registration.seed) || this.nextSeedValue(tournament.registrations));
             registration.seedSource = registration.seedSource || 'manual';
-            registration.rankSnapshot = this.normalizeRankTier(registration.rankSnapshot || member?.rankTier);
-            registration.eloSnapshot = Number(registration.eloSnapshot) || member?.elo || 1200;
-            registration.genderSnapshot = registration.genderSnapshot || member?.gender;
-            registration.departmentSnapshot = registration.departmentSnapshot || member?.department;
+
+            if (tournament.status === 'draft' && member) {
+                registration.rankSnapshot = this.normalizeRankTier(member.rankTier);
+                registration.eloSnapshot = member.elo ?? registration.eloSnapshot;
+                registration.genderSnapshot = member.gender ?? registration.genderSnapshot;
+                registration.departmentSnapshot = member.department ?? registration.departmentSnapshot;
+            } else {
+                registration.rankSnapshot = this.normalizeRankTier(registration.rankSnapshot || member?.rankTier);
+                registration.eloSnapshot = Number(registration.eloSnapshot) || member?.elo || 1200;
+                registration.genderSnapshot = registration.genderSnapshot || member?.gender;
+                registration.departmentSnapshot = registration.departmentSnapshot || member?.department;
+            }
             registration.registeredAt = registration.registeredAt || new Date().toISOString();
         }
 
@@ -747,10 +755,23 @@ export class EvnictDataService {
         return true;
     }
 
+    deleteMember(memberId: string, actorId: string): boolean {
+        const index = this.members.findIndex((item) => item.id === memberId);
+        if (index === -1) return false;
+
+        const member = this.members[index];
+        const name = member.fullName;
+        this.members.splice(index, 1);
+        this.logAction(actorId, 'Xoa thanh vien', `Da xoa thanh vien ${name} (ID: ${memberId})`, 'Admin xoa thu cong.');
+        this.http.delete(`${this.apiUrl}/members/${memberId}?actorId=${actorId}`).subscribe({ error: () => {} });
+        return true;
+    }
+
     updateMemberRank(memberId: string, rankTier: RankTier): boolean {
         const member = this.members.find((item) => item.id === memberId);
         if (!member) return false;
         member.rankTier = this.normalizeRankTier(rankTier);
+        this.syncMemberSnapshotsAcrossDraftTournaments(memberId);
         this.refreshAllTeamSubMatchHandicapTexts(true);
         return true;
     }
@@ -772,6 +793,7 @@ export class EvnictDataService {
         this.logAction(actorId, 'Ghi de hang xep hang', `Thay doi hang cua ${member.fullName} tu ${oldRank} sang ${normalizedRank}`, reason);
         this.pushNotification(member.id, 'Thay doi hang boi Admin', `Hang cua ban da duoc dieu chinh tu ${oldRank} sang ${normalizedRank}.`);
 
+        this.syncMemberSnapshotsAcrossDraftTournaments(memberId);
         this.http.put(`${this.apiUrl}/members/override/${memberId}?elo=${member.elo}&rank=${normalizedRank}&actorId=${actorId}&reason=${encodeURIComponent(reason)}`, {}).subscribe();
         this.refreshAllTeamSubMatchHandicapTexts(true);
         return true;
@@ -791,9 +813,70 @@ export class EvnictDataService {
         this.logAction(actorId, 'Ghi de diem Elo', `Thay doi Elo cua ${member.fullName} tu ${oldElo} sang ${newElo}`, reason);
         this.pushNotification(member.id, 'Thay doi Elo boi Admin', `Diem Elo cua ban da duoc dieu chinh tu ${oldElo} sang ${newElo}.`);
 
+        this.syncMemberSnapshotsAcrossDraftTournaments(memberId);
         this.http.put(`${this.apiUrl}/members/override/${memberId}?elo=${newElo}&rank=${newRank}&actorId=${actorId}&reason=${encodeURIComponent(reason)}`, {}).subscribe();
         this.refreshAllTeamSubMatchHandicapTexts(true);
         return true;
+    }
+
+    syncMemberSnapshotsAcrossDraftTournaments(memberId?: string): void {
+        for (const t of this.tournaments) {
+            if (t.status !== 'draft') continue;
+            if (!t.registrations || t.registrations.length === 0) continue;
+
+            let updated = false;
+            for (const reg of t.registrations) {
+                if (memberId && reg.memberId !== memberId) continue;
+                const member = this.getMemberById(reg.memberId);
+                if (!member) continue;
+
+                const normRank = this.normalizeRankTier(member.rankTier);
+                if (reg.rankSnapshot !== normRank || reg.eloSnapshot !== member.elo) {
+                    reg.rankSnapshot = normRank;
+                    reg.eloSnapshot = member.elo;
+                    reg.genderSnapshot = member.gender;
+                    reg.departmentSnapshot = member.department;
+                    updated = true;
+                }
+            }
+
+            if (updated) {
+                this.reorderDraftTournamentSeeds(t);
+                this.syncTournamentToBackend(t.id);
+            }
+        }
+    }
+
+    private getRankWeight(rank: RankTier | string | null | undefined): number {
+        const r = this.normalizeRankTier(rank);
+        switch (r) {
+            case 'A0': return 0;
+            case 'A1': return 1;
+            case 'A2': return 2;
+            case 'A3': return 3;
+            case 'A4': return 4;
+            case 'A5': return 5;
+            case 'A6': return 6;
+            default: return 99;
+        }
+    }
+
+    private reorderDraftTournamentSeeds(t: Tournament): void {
+        if (!t.registrations || t.registrations.length === 0) return;
+
+        t.registrations.sort((a, b) => {
+            const rankDiff = this.getRankWeight(a.rankSnapshot) - this.getRankWeight(b.rankSnapshot);
+            if (rankDiff !== 0) return rankDiff;
+            return (b.eloSnapshot || 1200) - (a.eloSnapshot || 1200);
+        });
+
+        t.registrations.forEach((reg, idx) => {
+            reg.seed = idx + 1;
+        });
+
+        if (t.participants) {
+            t.participants = t.registrations.map(r => r.memberId);
+        }
     }
 
     // --- MATCH RECORDING ---
@@ -1486,9 +1569,8 @@ export class EvnictDataService {
         let competitors: Competitor[] = [];
 
         if (t.type === 'team' || t.type === 'double') {
-            // Only generate automatically if there are no teams populated yet
             if (!t.teams || t.teams.length === 0) {
-                this.generateTeamsForTournament(id);
+                return false;
             }
             competitors = (t.teams || []).map((team) => ({
                 id: team.id,
@@ -1850,6 +1932,52 @@ export class EvnictDataService {
             setScores: setScores || [],
             recordedById: this.loggedInUserId || undefined
         });
+        return true;
+    }
+
+    drawGroupTieBreakLot(tournamentId: string, groupName: string): boolean {
+        const t = this.tournaments.find((x) => x.id === tournamentId);
+        if (!t || !t.standings) return false;
+
+        const standing = t.standings.find((s) => s.groupName === groupName);
+        if (!standing || !standing.hasTie || !standing.tiedCompetitorIds || standing.tiedCompetitorIds.length === 0) {
+            return false;
+        }
+
+        // Shuffle tied competitor IDs to perform manual lot draw
+        const shuffledTiedIds = [...standing.tiedCompetitorIds].sort(() => Math.random() - 0.5);
+
+        // Assign tieBreakLot index (1, 2, 3...)
+        shuffledTiedIds.forEach((compVal, idx) => {
+            const row = standing.rows.find((r) => r.competitor.id === compVal);
+            if (row) {
+                row.tieBreakLot = idx + 1;
+            }
+        });
+
+        // Re-sort standing rows with updated tieBreakLot
+        standing.rows.sort((a, b) => {
+            if (a.matchPoints !== b.matchPoints) return b.matchPoints - a.matchPoints;
+            const aDiff = a.pointsFor - a.pointsAgainst;
+            const bDiff = b.pointsFor - b.pointsAgainst;
+            if (bDiff !== aDiff) return bDiff - aDiff;
+            const aSetsDiff = (a.setsFor || 0) - (a.setsAgainst || 0);
+            const bSetsDiff = (b.setsFor || 0) - (b.setsAgainst || 0);
+            if (bSetsDiff !== aSetsDiff) return bSetsDiff - aSetsDiff;
+            if (a.tieBreakLot !== undefined && b.tieBreakLot !== undefined) {
+                return a.tieBreakLot - b.tieBreakLot;
+            }
+            return a.competitor.name.localeCompare(b.competitor.name);
+        });
+
+        // Re-assign ranks 1, 2, 3...
+        standing.rows.forEach((r, idx) => {
+            r.rank = idx + 1;
+        });
+
+        standing.hasTie = false;
+        this.syncKnockoutMatchesFromStandings(t);
+        this.syncTournamentToBackend(tournamentId);
         return true;
     }
 
