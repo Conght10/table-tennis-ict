@@ -335,7 +335,7 @@ public class TournamentController {
                             
                             Object basedOnVersionObj = map.get("basedOnRegistrationVersion");
                             if (basedOnVersionObj instanceof Number bNum) {
-                                newRev.setBasedOnRegistrationVersion(bNum.intValue());
+                                newRev.setBasedOnRegistrationVersion(bNum.longValue());
                             } else {
                                 newRev.setBasedOnRegistrationVersion(tournament.getRegistrationVersion());
                             }
