@@ -1962,19 +1962,7 @@ export class EvnictDataService {
         });
 
         // Re-sort standing rows with updated tieBreakLot
-        standing.rows.sort((a, b) => {
-            if (a.matchPoints !== b.matchPoints) return b.matchPoints - a.matchPoints;
-            const aDiff = a.pointsFor - a.pointsAgainst;
-            const bDiff = b.pointsFor - b.pointsAgainst;
-            if (bDiff !== aDiff) return bDiff - aDiff;
-            const aSetsDiff = (a.setsFor || 0) - (a.setsAgainst || 0);
-            const bSetsDiff = (b.setsFor || 0) - (b.setsAgainst || 0);
-            if (bSetsDiff !== aSetsDiff) return bSetsDiff - aSetsDiff;
-            if (a.tieBreakLot !== undefined && b.tieBreakLot !== undefined) {
-                return a.tieBreakLot - b.tieBreakLot;
-            }
-            return a.competitor.name.localeCompare(b.competitor.name);
-        });
+        standing.rows.sort((a, b) => this.tournamentEngine.sortStandingRows(a, b, t.scores || [], standing.rows));
 
         // Re-assign ranks 1, 2, 3...
         standing.rows.forEach((r, idx) => {

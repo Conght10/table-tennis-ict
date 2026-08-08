@@ -21,6 +21,12 @@ interface MutableStanding<TCompetitor extends Competitor> {
     tieBreakLot?: number;
 }
 
+export interface SortableStandingRow {
+    competitor: Competitor;
+    matchPoints: number;
+    tieBreakLot?: number;
+}
+
 interface SeededCompetitor extends Competitor {
     seed: number;
     gender?: string;
@@ -30,8 +36,9 @@ interface SeededCompetitor extends Competitor {
     providedIn: 'root'
 })
 export class TournamentEngineService {
-    private readonly winPoints = 3;
-    private readonly lossPoints = 0;
+    private readonly winPoints = 2;
+    private readonly lossPoints = 1;
+    private readonly forfeitPoints = 0;
     private lastSelectedCaptainTeamKey = '';
 
     generateRandomTeams<TPlayer extends Competitor>(players: readonly TPlayer[], teamSize: number): Team[] {
@@ -617,21 +624,36 @@ export class TournamentEngineService {
                     away.setsAgainst += score.homeScore || 0;
                 }
 
-                if (score.homeScore > score.awayScore) {
-                    home.won += 1;
-                    away.lost += 1;
-                    home.matchPoints += this.winPoints;
-                    away.matchPoints += this.lossPoints;
+                if (score.isWalkover) {
+                    const homeWon = score.walkoverWinnerId === score.homeCompetitorId;
+                    if (homeWon) {
+                        home.won += 1;
+                        away.lost += 1;
+                        home.matchPoints += this.winPoints;
+                        away.matchPoints += this.forfeitPoints;
+                    } else {
+                        away.won += 1;
+                        home.lost += 1;
+                        away.matchPoints += this.winPoints;
+                        home.matchPoints += this.forfeitPoints;
+                    }
                 } else {
-                    away.won += 1;
-                    home.lost += 1;
-                    away.matchPoints += this.winPoints;
-                    home.matchPoints += this.lossPoints;
+                    if (score.homeScore > score.awayScore) {
+                        home.won += 1;
+                        away.lost += 1;
+                        home.matchPoints += this.winPoints;
+                        away.matchPoints += this.lossPoints;
+                    } else {
+                        away.won += 1;
+                        home.lost += 1;
+                        away.matchPoints += this.winPoints;
+                        home.matchPoints += this.lossPoints;
+                    }
                 }
             }
 
             const rows = Array.from(standingMap.values())
-                .sort((left, right) => this.sortStandingRows(left, right, groupScores))
+                .sort((left, right) => this.sortStandingRows(left, right, groupScores, Array.from(standingMap.values())))
                 .map((row, index) => ({ ...row, rank: index + 1 }));
 
             let hasTie = false;
@@ -640,17 +662,20 @@ export class TournamentEngineService {
             for (let i = 0; i < rows.length - 1; i++) {
                 const a = rows[i];
                 const b = rows[i + 1];
-                const aDiff = a.pointsFor - a.pointsAgainst;
-                const bDiff = b.pointsFor - b.pointsAgainst;
-                const aSetsDiff = (a.setsFor || 0) - (a.setsAgainst || 0);
-                const bSetsDiff = (b.setsFor || 0) - (b.setsAgainst || 0);
-                const h2h = this.headToHead(a.competitor.id, b.competitor.id, groupScores);
+                if (a.matchPoints === b.matchPoints) {
+                    const tiedIds = rows.filter(r => r.matchPoints === a.matchPoints).map(r => r.competitor.id);
+                    const tiedScores = groupScores.filter(s => tiedIds.includes(s.homeCompetitorId) && tiedIds.includes(s.awayCompetitorId));
+                    const aStats = this.computeTiedStats(a.competitor.id, tiedScores);
+                    const bStats = this.computeTiedStats(b.competitor.id, tiedScores);
 
-                if (a.matchPoints === b.matchPoints && aDiff === bDiff && aSetsDiff === bSetsDiff && h2h === 0) {
-                    if (a.tieBreakLot === undefined || b.tieBreakLot === undefined) {
-                        hasTie = true;
-                        if (!tiedCompetitorIds.includes(a.competitor.id)) tiedCompetitorIds.push(a.competitor.id);
-                        if (!tiedCompetitorIds.includes(b.competitor.id)) tiedCompetitorIds.push(b.competitor.id);
+                    if (aStats.subMatchesDiff === bStats.subMatchesDiff &&
+                        aStats.setsDiff === bStats.setsDiff &&
+                        aStats.pointsDiff === bStats.pointsDiff) {
+                        if (a.tieBreakLot === undefined || b.tieBreakLot === undefined) {
+                            hasTie = true;
+                            if (!tiedCompetitorIds.includes(a.competitor.id)) tiedCompetitorIds.push(a.competitor.id);
+                            if (!tiedCompetitorIds.includes(b.competitor.id)) tiedCompetitorIds.push(b.competitor.id);
+                        }
                     }
                 }
             }
@@ -694,65 +719,105 @@ export class TournamentEngineService {
         return scores;
     }
 
-    private sortStandingRows<TCompetitor extends Competitor>(
-        left: MutableStanding<TCompetitor>,
-        right: MutableStanding<TCompetitor>,
-        groupScores: readonly GroupMatchScore[]
+    sortStandingRows(
+        left: SortableStandingRow,
+        right: SortableStandingRow,
+        groupScores: readonly GroupMatchScore[],
+        allRows: readonly SortableStandingRow[]
     ): number {
-        // 1. matchPoints (Win=3, Loss=0)
+        // 1. matchPoints (Win=2, Loss=1, Forfeit=0)
         if (right.matchPoints !== left.matchPoints) {
             return right.matchPoints - left.matchPoints;
         }
 
-        // 2. Hiệu số trận nhỏ thắng - thua (pointsFor - pointsAgainst)
-        const leftDiff = left.pointsFor - left.pointsAgainst;
-        const rightDiff = right.pointsFor - right.pointsAgainst;
-        if (rightDiff !== leftDiff) {
-            return rightDiff - leftDiff;
+        // Find all teams tied on the same matchPoints
+        const tiedIds = allRows
+            .filter((r) => r.matchPoints === left.matchPoints)
+            .map((r) => r.competitor.id);
+
+        if (tiedIds.length >= 2) {
+            // Filter scores to ONLY matches between the tied teams.
+            const tiedScores = groupScores.filter(
+                (score) =>
+                    tiedIds.includes(score.homeCompetitorId) &&
+                    tiedIds.includes(score.awayCompetitorId)
+            );
+
+            // Compute tied stats for left and right
+            const leftStats = this.computeTiedStats(left.competitor.id, tiedScores);
+            const rightStats = this.computeTiedStats(right.competitor.id, tiedScores);
+
+            // 1. Hiệu số trận nhỏ thắng - thua giữa các đội bằng điểm
+            if (rightStats.subMatchesDiff !== leftStats.subMatchesDiff) {
+                return rightStats.subMatchesDiff - leftStats.subMatchesDiff;
+            }
+
+            // 2. Hiệu số séc thắng - thua giữa các đội bằng điểm
+            if (rightStats.setsDiff !== leftStats.setsDiff) {
+                return rightStats.setsDiff - leftStats.setsDiff;
+            }
+
+            // 3. Hiệu số điểm thắng - thua của tất cả các séc giữa các đội bằng điểm
+            if (rightStats.pointsDiff !== leftStats.pointsDiff) {
+                return rightStats.pointsDiff - leftStats.pointsDiff;
+            }
         }
 
-        // 3. Hiệu số séc thắng - thua (setsFor - setsAgainst)
-        const leftSetsDiff = left.setsFor - left.setsAgainst;
-        const rightSetsDiff = right.setsFor - right.setsAgainst;
-        if (rightSetsDiff !== leftSetsDiff) {
-            return rightSetsDiff - leftSetsDiff;
-        }
-
-        // 4. Đối đầu trực tiếp (headToHead)
-        const headToHead = this.headToHead(left.competitor.id, right.competitor.id, groupScores);
-        if (headToHead !== 0) {
-            return headToHead;
-        }
-
-        // 5. Kết quả bốc thăm thứ hạng thủ công (tieBreakLot)
+        // 4. Kết quả bốc thăm thứ hạng thủ công (tieBreakLot)
         if (left.tieBreakLot !== undefined && right.tieBreakLot !== undefined) {
             return left.tieBreakLot - right.tieBreakLot;
         }
 
-        // 6. Tên (Alphabetical)
+        // 5. Tên (Alphabetical)
         return left.competitor.name.localeCompare(right.competitor.name);
     }
 
-    private headToHead(leftId: string, rightId: string, groupScores: readonly GroupMatchScore[]): number {
-        const match = groupScores.find(
-            (score) =>
-                (score.homeCompetitorId === leftId && score.awayCompetitorId === rightId) ||
-                (score.homeCompetitorId === rightId && score.awayCompetitorId === leftId)
-        );
+    private computeTiedStats(competitorId: string, scores: readonly GroupMatchScore[]) {
+        let subMatchesDiff = 0;
+        let setsDiff = 0;
+        let pointsDiff = 0;
 
-        if (!match) {
-            return 0;
+        for (const score of scores) {
+            const isHome = score.homeCompetitorId === competitorId;
+            const isAway = score.awayCompetitorId === competitorId;
+            if (!isHome && !isAway) continue;
+
+            // 1. Sub-matches difference
+            subMatchesDiff += isHome ? (score.homeScore - score.awayScore) : (score.awayScore - score.homeScore);
+
+            // 2. Sets difference
+            if (score.subMatches && score.subMatches.length > 0) {
+                for (const sub of score.subMatches) {
+                    const subHome = sub.homeScore || 0;
+                    const subAway = sub.awayScore || 0;
+                    setsDiff += isHome ? (subHome - subAway) : (subAway - subHome);
+
+                    // 3. Points difference from subMatch setScores
+                    if (sub.setScores && sub.setScores.length > 0) {
+                        for (const set of sub.setScores) {
+                            const setHome = set.home || 0;
+                            const setAway = set.away || 0;
+                            pointsDiff += isHome ? (setHome - setAway) : (setAway - setHome);
+                        }
+                    }
+                }
+            } else {
+                const setsHome = score.homeScore || 0;
+                const setsAway = score.awayScore || 0;
+                setsDiff += isHome ? (setsHome - setsAway) : (setsAway - setsHome);
+
+                // Points difference from match-level setScores
+                if (score.setScores && score.setScores.length > 0) {
+                    for (const set of score.setScores) {
+                        const setHome = set.home || 0;
+                        const setAway = set.away || 0;
+                        pointsDiff += isHome ? (setHome - setAway) : (setAway - setHome);
+                    }
+                }
+            }
         }
 
-        const leftWon =
-            (match.homeCompetitorId === leftId && match.homeScore > match.awayScore) ||
-            (match.awayCompetitorId === leftId && match.awayScore > match.homeScore);
-
-        if (leftWon) {
-            return -1;
-        }
-
-        return 1;
+        return { subMatchesDiff, setsDiff, pointsDiff };
     }
 
     private randomScore(): number {

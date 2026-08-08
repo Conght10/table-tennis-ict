@@ -29,7 +29,8 @@ export class AppMenu {
                 {
                     label: 'Hệ Thống EVNICT',
                     items: [
-                        { label: 'Trang Chủ CLB', icon: 'pi pi-fw pi-home', routerLink: ['/'] }
+                        { label: 'Trang Chủ CLB', icon: 'pi pi-fw pi-home', routerLink: ['/'] },
+                        { label: 'Trực Tiếp Giải Đấu', icon: 'pi pi-fw pi-trophy', routerLink: ['/live'] }
                     ]
                 },
                 {
@@ -46,7 +47,8 @@ export class AppMenu {
         const roles = user?.roles ?? [];
 
         const systemItems: any[] = [
-            { label: 'Trang Chủ CLB', icon: 'pi pi-fw pi-home', routerLink: ['/'] }
+            { label: 'Trang Chủ CLB', icon: 'pi pi-fw pi-home', routerLink: ['/'] },
+            { label: 'Trực Tiếp Giải Đấu', icon: 'pi pi-fw pi-trophy', routerLink: ['/live'] }
         ];
 
         if (roles.includes('player')) {

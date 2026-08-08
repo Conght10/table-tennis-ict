@@ -31,6 +31,10 @@ import { EvnictDataService } from '../../pages/evnict/domain/evnict-data.service
                [class.text-primary]="router.url === '/'" [class.font-bold]="router.url === '/'">
                 <i class="pi pi-home mr-1"></i> Trang Chủ
             </a>
+            <a routerLink="/live" class="text-sm font-semibold hover:text-primary transition no-underline text-slate-700 dark:text-slate-350 flex items-center"
+               [class.text-primary]="router.url.startsWith('/live')" [class.font-bold]="router.url.startsWith('/live')">
+                <i class="pi pi-trophy mr-1 text-primary"></i> Trực Tiếp Giải Đấu
+            </a>
 
             <!-- High-level Portal Links when logged in but NOT on the portal routes -->
             <ng-container *ngIf="isLoggedIn() && !isCurrentRouteAdmin() && !isCurrentRouteUser()">

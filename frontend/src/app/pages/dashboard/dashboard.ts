@@ -87,6 +87,11 @@ import { EvnictDataService } from '../evnict/domain/evnict-data.service';
                                     class="p-button-outlined p-button-lg px-6 p-button-secondary border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-850 font-semibold" 
                                     routerLink="/auth/register"></button>
                         </div>
+                        <div class="pt-2">
+                            <a routerLink="/live" class="text-sm font-bold text-primary hover:underline flex items-center justify-center gap-1.5 cursor-pointer">
+                                <i class="pi pi-trophy"></i> Xem Giải Đấu Đang Diễn Ra (Vãng Lai) →
+                            </a>
+                        </div>
                     </ng-container>
 
                     <ng-container *ngIf="isLoggedIn">

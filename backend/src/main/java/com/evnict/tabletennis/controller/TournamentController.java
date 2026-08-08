@@ -1483,6 +1483,9 @@ public class TournamentController {
             scMap.put("awayScore", 0);
             scMap.put("completed", false);
             scMap.put("subMatches", new ArrayList<>());
+            scMap.put("isWalkover", false);
+            scMap.put("walkoverWinnerId", null);
+            scMap.put("setScores", new ArrayList<>());
             stateScores.add(scMap);
         }
 
@@ -1702,6 +1705,9 @@ public class TournamentController {
             scMap.put("awayScore", 0);
             scMap.put("completed", false);
             scMap.put("subMatches", new ArrayList<>());
+            scMap.put("isWalkover", false);
+            scMap.put("walkoverWinnerId", null);
+            scMap.put("setScores", new ArrayList<>());
             stateScores.add(scMap);
         }
 
@@ -3376,19 +3382,38 @@ public class TournamentController {
                     inc(awayRow, "setsAgainst", homeScore);
                 }
 
-                if (homeScore > awayScore) {
-                    inc(homeRow, "won", 1);
-                    inc(awayRow, "lost", 1);
-                    inc(homeRow, "matchPoints", 3);
+                boolean isWalkover = asBoolean(score.get("isWalkover"));
+                if (isWalkover) {
+                    String walkoverWinnerId = asString(score.get("walkoverWinnerId"));
+                    boolean homeWon = homeId.equals(walkoverWinnerId);
+                    if (homeWon) {
+                        inc(homeRow, "won", 1);
+                        inc(awayRow, "lost", 1);
+                        inc(homeRow, "matchPoints", 2);
+                        inc(awayRow, "matchPoints", 0);
+                    } else {
+                        inc(awayRow, "won", 1);
+                        inc(homeRow, "lost", 1);
+                        inc(awayRow, "matchPoints", 2);
+                        inc(homeRow, "matchPoints", 0);
+                    }
                 } else {
-                    inc(awayRow, "won", 1);
-                    inc(homeRow, "lost", 1);
-                    inc(awayRow, "matchPoints", 3);
+                    if (homeScore > awayScore) {
+                        inc(homeRow, "won", 1);
+                        inc(awayRow, "lost", 1);
+                        inc(homeRow, "matchPoints", 2);
+                        inc(awayRow, "matchPoints", 1);
+                    } else {
+                        inc(awayRow, "won", 1);
+                        inc(homeRow, "lost", 1);
+                        inc(awayRow, "matchPoints", 2);
+                        inc(homeRow, "matchPoints", 1);
+                    }
                 }
             }
 
             List<Map<String, Object>> rows = new ArrayList<>(rowByCompetitor.values());
-            rows.sort((left, right) -> compareStandingRows(left, right, groupScores));
+            rows.sort((left, right) -> compareStandingRows(left, right, groupScores, rows));
             for (int i = 0; i < rows.size(); i += 1) {
                 rows.get(i).put("rank", i + 1);
             }
@@ -3402,30 +3427,99 @@ public class TournamentController {
         return standings;
     }
 
-    private int compareStandingRows(Map<String, Object> left, Map<String, Object> right, List<Map<String, Object>> groupScores) {
+    private static class ControllerTiedStats {
+        int subMatchesDiff = 0;
+        int setsDiff = 0;
+        int pointsDiff = 0;
+    }
+
+    private ControllerTiedStats computeControllerTiedStats(String competitorId, List<Map<String, Object>> scores) {
+        ControllerTiedStats stats = new ControllerTiedStats();
+        for (Map<String, Object> score : scores) {
+            String homeId = asString(score.get("homeCompetitorId"));
+            String awayId = asString(score.get("awayCompetitorId"));
+            boolean isHome = homeId.equals(competitorId);
+            boolean isAway = awayId.equals(competitorId);
+            if (!isHome && !isAway) continue;
+
+            int homeScore = asInt(score.get("homeScore"));
+            int awayScore = asInt(score.get("awayScore"));
+
+            stats.subMatchesDiff += isHome ? (homeScore - awayScore) : (awayScore - homeScore);
+
+            List<Map<String, Object>> subMatches = toObjectMapList(score.get("subMatches"));
+            if (!subMatches.isEmpty()) {
+                for (Map<String, Object> sub : subMatches) {
+                    int subHome = asInt(sub.get("homeScore"));
+                    int subAway = asInt(sub.get("awayScore"));
+                    stats.setsDiff += isHome ? (subHome - subAway) : (subAway - subHome);
+
+                    List<Map<String, Object>> setScores = toObjectMapList(sub.get("setScores"));
+                    if (!setScores.isEmpty()) {
+                        for (Map<String, Object> set : setScores) {
+                            int setHome = asInt(set.get("home"));
+                            int setAway = asInt(set.get("away"));
+                            stats.pointsDiff += isHome ? (setHome - setAway) : (setAway - setHome);
+                        }
+                    }
+                }
+            } else {
+                stats.setsDiff += isHome ? (homeScore - awayScore) : (awayScore - homeScore);
+
+                List<Map<String, Object>> setScores = toObjectMapList(score.get("setScores"));
+                if (!setScores.isEmpty()) {
+                    for (Map<String, Object> set : setScores) {
+                        int setHome = asInt(set.get("home"));
+                        int setAway = asInt(set.get("away"));
+                        stats.pointsDiff += isHome ? (setHome - setAway) : (setAway - setHome);
+                    }
+                }
+            }
+        }
+        return stats;
+    }
+
+    private int compareStandingRows(Map<String, Object> left, Map<String, Object> right, List<Map<String, Object>> groupScores, List<Map<String, Object>> allRows) {
         int leftMatchPoints = asInt(left.get("matchPoints"));
         int rightMatchPoints = asInt(right.get("matchPoints"));
         if (rightMatchPoints != leftMatchPoints) {
             return rightMatchPoints - leftMatchPoints;
         }
 
-        int leftDiff = asInt(left.get("pointsFor")) - asInt(left.get("pointsAgainst"));
-        int rightDiff = asInt(right.get("pointsFor")) - asInt(right.get("pointsAgainst"));
-        if (rightDiff != leftDiff) {
-            return rightDiff - leftDiff;
+        List<String> tiedIds = new ArrayList<>();
+        for (Map<String, Object> row : allRows) {
+            if (asInt(row.get("matchPoints")) == leftMatchPoints) {
+                tiedIds.add(asString(toObjectMap(row.get("competitor")).get("id")));
+            }
         }
 
-        int leftSetsDiff = asInt(left.get("setsFor")) - asInt(left.get("setsAgainst"));
-        int rightSetsDiff = asInt(right.get("setsFor")) - asInt(right.get("setsAgainst"));
-        if (rightSetsDiff != leftSetsDiff) {
-            return rightSetsDiff - leftSetsDiff;
-        }
+        if (tiedIds.size() >= 2) {
+            List<Map<String, Object>> tiedScores = new ArrayList<>();
+            for (Map<String, Object> score : groupScores) {
+                String homeId = asString(score.get("homeCompetitorId"));
+                String awayId = asString(score.get("awayCompetitorId"));
+                if (tiedIds.contains(homeId) && tiedIds.contains(awayId)) {
+                    tiedScores.add(score);
+                }
+            }
 
-        String leftId = asString(toObjectMap(left.get("competitor")).get("id"));
-        String rightId = asString(toObjectMap(right.get("competitor")).get("id"));
-        int headToHead = compareHeadToHead(leftId, rightId, groupScores);
-        if (headToHead != 0) {
-            return headToHead;
+            String leftId = asString(toObjectMap(left.get("competitor")).get("id"));
+            String rightId = asString(toObjectMap(right.get("competitor")).get("id"));
+
+            ControllerTiedStats leftStats = computeControllerTiedStats(leftId, tiedScores);
+            ControllerTiedStats rightStats = computeControllerTiedStats(rightId, tiedScores);
+
+            if (rightStats.subMatchesDiff != leftStats.subMatchesDiff) {
+                return rightStats.subMatchesDiff - leftStats.subMatchesDiff;
+            }
+
+            if (rightStats.setsDiff != leftStats.setsDiff) {
+                return rightStats.setsDiff - leftStats.setsDiff;
+            }
+
+            if (rightStats.pointsDiff != leftStats.pointsDiff) {
+                return rightStats.pointsDiff - leftStats.pointsDiff;
+            }
         }
 
         Object leftLot = left.get("tieBreakLot");
@@ -3438,26 +3532,6 @@ public class TournamentController {
         String leftName = asString(toObjectMap(left.get("competitor")).get("name"));
         String rightName = asString(toObjectMap(right.get("competitor")).get("name"));
         return leftName.compareToIgnoreCase(rightName);
-    }
-
-    private int compareHeadToHead(String leftId, String rightId, List<Map<String, Object>> groupScores) {
-        for (Map<String, Object> score : groupScores) {
-            String homeId = asString(score.get("homeCompetitorId"));
-            String awayId = asString(score.get("awayCompetitorId"));
-
-            boolean matched = (homeId.equals(leftId) && awayId.equals(rightId))
-                    || (homeId.equals(rightId) && awayId.equals(leftId));
-            if (!matched) {
-                continue;
-            }
-
-            int homeScore = asInt(score.get("homeScore"));
-            int awayScore = asInt(score.get("awayScore"));
-            boolean leftWon = (homeId.equals(leftId) && homeScore > awayScore)
-                    || (awayId.equals(leftId) && awayScore > homeScore);
-            return leftWon ? -1 : 1;
-        }
-        return 0;
     }
 
     private boolean isScoreCompletedForStanding(Map<String, Object> score) {

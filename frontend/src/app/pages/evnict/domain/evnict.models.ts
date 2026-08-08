@@ -201,6 +201,8 @@ export interface GroupMatchScore {
     subMatches?: SubMatchScore[];
     completed?: boolean;
     setScores?: { home: number; away: number }[];
+    isWalkover?: boolean;
+    walkoverWinnerId?: string;
 }
 
 export interface GroupStandingRow<TCompetitor extends Competitor> {

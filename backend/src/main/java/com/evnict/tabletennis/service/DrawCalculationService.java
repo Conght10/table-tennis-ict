@@ -7,8 +7,9 @@ import java.util.stream.Collectors;
 @Service
 public class DrawCalculationService {
 
-    private static final int WIN_POINTS = 3;
-    private static final int LOSS_POINTS = 0;
+    private static final int WIN_POINTS = 2;
+    private static final int LOSS_POINTS = 1;
+    private static final int FORFEIT_POINTS = 0;
 
     public static class Competitor {
         public String id;
@@ -75,6 +76,9 @@ public class DrawCalculationService {
         public int awayScore;
         public boolean completed;
         public List<Map<String, Object>> subMatches;
+        public Boolean isWalkover;
+        public String walkoverWinnerId;
+        public List<Map<String, Object>> setScores;
     }
 
     public static class GroupStandingRow {
@@ -408,21 +412,37 @@ public class DrawCalculationService {
                     away.setsAgainst += score.homeScore;
                 }
 
-                if (score.homeScore > score.awayScore) {
-                    home.won += 1;
-                    away.lost += 1;
-                    home.matchPoints += WIN_POINTS;
-                    away.matchPoints += LOSS_POINTS;
+                boolean isWalkover = score.isWalkover != null && score.isWalkover;
+                if (isWalkover) {
+                    boolean homeWon = score.homeCompetitorId.equals(score.walkoverWinnerId);
+                    if (homeWon) {
+                        home.won += 1;
+                        away.lost += 1;
+                        home.matchPoints += WIN_POINTS;
+                        away.matchPoints += FORFEIT_POINTS;
+                    } else {
+                        away.won += 1;
+                        home.lost += 1;
+                        away.matchPoints += WIN_POINTS;
+                        home.matchPoints += FORFEIT_POINTS;
+                    }
                 } else {
-                    away.won += 1;
-                    home.lost += 1;
-                    away.matchPoints += WIN_POINTS;
-                    home.matchPoints += LOSS_POINTS;
+                    if (score.homeScore > score.awayScore) {
+                        home.won += 1;
+                        away.lost += 1;
+                        home.matchPoints += WIN_POINTS;
+                        away.matchPoints += LOSS_POINTS;
+                    } else {
+                        away.won += 1;
+                        home.lost += 1;
+                        away.matchPoints += WIN_POINTS;
+                        home.matchPoints += LOSS_POINTS;
+                    }
                 }
             }
 
             List<GroupStandingRow> rows = new ArrayList<>(standingMap.values());
-            rows.sort((left, right) -> sortStandingRows(left, right, groupScores));
+            rows.sort((left, right) -> sortStandingRows(left, right, groupScores, rows));
 
             for (int i = 0; i < rows.size(); i++) {
                 rows.get(i).rank = i + 1;
@@ -436,26 +456,85 @@ public class DrawCalculationService {
         return standings;
     }
 
-    private int sortStandingRows(GroupStandingRow left, GroupStandingRow right, List<GroupMatchScore> groupScores) {
+    private static class TiedStats {
+        int subMatchesDiff = 0;
+        int setsDiff = 0;
+        int pointsDiff = 0;
+    }
+
+    private TiedStats computeTiedStats(String competitorId, List<GroupMatchScore> scores) {
+        TiedStats stats = new TiedStats();
+        for (GroupMatchScore score : scores) {
+            boolean isHome = score.homeCompetitorId.equals(competitorId);
+            boolean isAway = score.awayCompetitorId.equals(competitorId);
+            if (!isHome && !isAway) continue;
+
+            stats.subMatchesDiff += isHome ? (score.homeScore - score.awayScore) : (score.awayScore - score.homeScore);
+
+            if (score.subMatches != null && !score.subMatches.isEmpty()) {
+                for (Map<String, Object> sub : score.subMatches) {
+                    int subHome = sub.get("homeScore") != null ? ((Number) sub.get("homeScore")).intValue() : 0;
+                    int subAway = sub.get("awayScore") != null ? ((Number) sub.get("awayScore")).intValue() : 0;
+                    stats.setsDiff += isHome ? (subHome - subAway) : (subAway - subHome);
+
+                    if (sub.get("setScores") != null) {
+                        List<Map<String, Object>> setScores = (List<Map<String, Object>>) sub.get("setScores");
+                        for (Map<String, Object> set : setScores) {
+                            int setHome = set.get("home") != null ? ((Number) set.get("home")).intValue() : 0;
+                            int setAway = set.get("away") != null ? ((Number) set.get("away")).intValue() : 0;
+                            stats.pointsDiff += isHome ? (setHome - setAway) : (setAway - setHome);
+                        }
+                    }
+                }
+            } else {
+                stats.setsDiff += isHome ? (score.homeScore - score.awayScore) : (score.awayScore - score.homeScore);
+
+                if (score.setScores != null) {
+                    for (Map<String, Object> set : score.setScores) {
+                        int setHome = set.get("home") != null ? ((Number) set.get("home")).intValue() : 0;
+                        int setAway = set.get("away") != null ? ((Number) set.get("away")).intValue() : 0;
+                        stats.pointsDiff += isHome ? (setHome - setAway) : (setAway - setHome);
+                    }
+                }
+            }
+        }
+        return stats;
+    }
+
+    private int sortStandingRows(GroupStandingRow left, GroupStandingRow right, List<GroupMatchScore> groupScores, List<GroupStandingRow> allRows) {
         if (right.matchPoints != left.matchPoints) {
             return right.matchPoints - left.matchPoints;
         }
 
-        int leftDiff = left.pointsFor - left.pointsAgainst;
-        int rightDiff = right.pointsFor - right.pointsAgainst;
-        if (rightDiff != leftDiff) {
-            return rightDiff - leftDiff;
+        List<String> tiedIds = new ArrayList<>();
+        for (GroupStandingRow row : allRows) {
+            if (row.matchPoints == left.matchPoints) {
+                tiedIds.add(row.competitor.id);
+            }
         }
 
-        int leftSetsDiff = left.setsFor - left.setsAgainst;
-        int rightSetsDiff = right.setsFor - right.setsAgainst;
-        if (rightSetsDiff != leftSetsDiff) {
-            return rightSetsDiff - leftSetsDiff;
-        }
+        if (tiedIds.size() >= 2) {
+            List<GroupMatchScore> tiedScores = new ArrayList<>();
+            for (GroupMatchScore score : groupScores) {
+                if (tiedIds.contains(score.homeCompetitorId) && tiedIds.contains(score.awayCompetitorId)) {
+                    tiedScores.add(score);
+                }
+            }
 
-        int headToHead = headToHead(left.competitor.id, right.competitor.id, groupScores);
-        if (headToHead != 0) {
-            return headToHead;
+            TiedStats leftStats = computeTiedStats(left.competitor.id, tiedScores);
+            TiedStats rightStats = computeTiedStats(right.competitor.id, tiedScores);
+
+            if (rightStats.subMatchesDiff != leftStats.subMatchesDiff) {
+                return rightStats.subMatchesDiff - leftStats.subMatchesDiff;
+            }
+
+            if (rightStats.setsDiff != leftStats.setsDiff) {
+                return rightStats.setsDiff - leftStats.setsDiff;
+            }
+
+            if (rightStats.pointsDiff != leftStats.pointsDiff) {
+                return rightStats.pointsDiff - leftStats.pointsDiff;
+            }
         }
 
         if (left.tieBreakLot != null && right.tieBreakLot != null) {
@@ -463,21 +542,6 @@ public class DrawCalculationService {
         }
 
         return left.competitor.name.compareTo(right.competitor.name);
-    }
-
-    private int headToHead(String leftId, String rightId, List<GroupMatchScore> groupScores) {
-        Optional<GroupMatchScore> matchOpt = groupScores.stream()
-            .filter(score -> (score.homeCompetitorId.equals(leftId) && score.awayCompetitorId.equals(rightId)) ||
-                             (score.homeCompetitorId.equals(rightId) && score.awayCompetitorId.equals(leftId)))
-            .findFirst();
-
-        if (matchOpt.isEmpty()) return 0;
-
-        GroupMatchScore match = matchOpt.get();
-        boolean leftWon = (match.homeCompetitorId.equals(leftId) && match.homeScore > match.awayScore) ||
-                          (match.awayCompetitorId.equals(leftId) && match.awayScore > match.homeScore);
-
-        return leftWon ? -1 : 1;
     }
 
     private double evaluateSeededTeams(List<List<SeededCompetitor>> teams, int maxFemalePerTeam) {

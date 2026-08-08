@@ -27,7 +27,7 @@ interface ParticipationView {
             <div class="col-span-12 screen-hero">
                 <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
                     <h2 class="screen-hero__title m-0">Bảng Điều Khiển Vận Động Viên EVNICT</h2>
-                    <button class="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 border border-white/30 cursor-pointer" (click)="refreshAllData()">
+                    <button class="px-3 py-1.5 bg-primary text-white hover:bg-primary-600 rounded-lg text-xs font-extrabold transition flex items-center gap-1.5 border-none shadow-sm cursor-pointer" (click)="refreshAllData()">
                         <i class="pi pi-refresh" [class.pi-spin]="isRefreshing"></i> Làm mới dữ liệu
                     </button>
                 </div>

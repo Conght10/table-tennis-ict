@@ -58,7 +58,8 @@ export const appRoutes: Routes = [
             { path: 'documentation', component: Documentation },
             { path: 'pages', loadChildren: () => import('./app/pages/pages.routes') },
             { path: 'admin', canActivate: [adminGuard], loadChildren: () => import('./app/pages/evnict/admin/admin.routes') },
-            { path: 'user', canActivate: [playerGuard], loadChildren: () => import('./app/pages/evnict/user/user.routes') }
+            { path: 'user', canActivate: [playerGuard], loadChildren: () => import('./app/pages/evnict/user/user.routes') },
+            { path: 'live', loadChildren: () => import('./app/pages/evnict/live/live.routes') }
         ]
     },
     { path: 'landing', component: Landing },
